@@ -52,7 +52,7 @@ class WhisperVoice:
         write(temp_file.name, self.sample_rate, recording)
         return temp_file.name
     
-    def transcribe_audio(self, file_path, output_file):
+    def transcribe_audio(self, file_path, output_file, should_paste_content):
         segments, info = self.model.transcribe(file_path, beam_size=5)
         print("Detected language '%s' with probability %f" % (info.language, info.language_probability))
         full_transcription = ""
@@ -63,23 +63,24 @@ class WhisperVoice:
                 full_transcription += segment.text + " "
                 f.write(segment.text + "\n")
         os.remove(file_path)
-
-        pyperclip.copy(full_transcription)
-        print("Transcription copied to clipboard.")
-        pyautogui.hotkey('ctrl', 'v')
+        
+        if should_paste_content:
+            pyperclip.copy(full_transcription)
+            print("Transcription copied to clipboard.")
+            pyautogui.hotkey('ctrl', 'v')
 
         return full_transcription
     
     def run(self, output_file="transcription.txt", file_path=None):
         if file_path:
             print(f"Transcribing file: {file_path}")
-            self.transcribe_audio(file_path, output_file)
+            self.transcribe_audio(file_path, output_file, False)
         else:
             print(f"Press {self.assigned_key} to start/stop recording")
             while True:
                 recording = self.record_audio()
                 temp_file_path = self.save_temp_audio(recording)
-                self.transcribe_audio(temp_file_path, output_file)
+                self.transcribe_audio(temp_file_path, output_file, True)
 
 if __name__ == "__main__":
     file_path = sys.argv[1] if len(sys.argv) > 1 else None
