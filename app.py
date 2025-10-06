@@ -1,88 +1,201 @@
-import sounddevice as sd
-import numpy as np
-from pynput import keyboard
-from scipy.io.wavfile import write
-import tempfile
+from tkinter import scrolledtext, filedialog, messagebox
+from PIL import Image, ImageDraw
+import tkinter as tk
+import threading
 import os
-import sys
-from faster_whisper import WhisperModel
 import pyperclip
-import pyautogui
+import pystray
 
-class WhisperVoice:
-    def __init__(self, model_size="large-v3", sample_rate=44100, assigned_key=keyboard.Key.scroll_lock):
-        self.model_size = model_size
-        self.sample_rate = sample_rate
-        self.model = WhisperModel(model_size, device="cuda", compute_type="float16")
-        self.assigned_key = assigned_key
-        self.is_recording = False
-        # Run on GPU with FP16
-        # model = WhisperModel(model_size, device="cuda", compute_type="float16")
-        # or run on GPU with INT8
-        # model = WhisperModel(model_size, device="cuda", compute_type="int8_float16")
-        # or run on CPU with INT8
-        # model = WhisperModel(model_size, device="cpu", compute_type="int8")
+from WhisperTranscriber import LiveWhisperTranscriber
 
-    def on_press(self, key):
-        if key == self.assigned_key:
-            self.is_recording = not self.is_recording
-            if self.is_recording:
-                print("Recording started.")
-            else:
-                print("Recording stopped.")
-                return False
-    
-    def record_audio(self):
-        recording = np.array([], dtype='float64').reshape(0, 2)
-        frames_per_buffer = int(self.sample_rate * 0.1)
+class WhisperVoiceApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Whisper Voice Transcriber")
         
-        with keyboard.Listener(on_press=self.on_press) as listener:
-            while True:
-                if self.is_recording:
-                    chunk = sd.rec(frames_per_buffer, samplerate=self.sample_rate, channels=2, dtype='float64')
-                    sd.wait()
-                    recording = np.vstack([recording, chunk])
-                if not self.is_recording and len(recording) > 0:
-                    break
-            listener.join()
-        return recording
-
-    def save_temp_audio(self, recording):
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
-        write(temp_file.name, self.sample_rate, recording)
-        return temp_file.name
-    
-    def transcribe_audio(self, file_path, output_file, should_paste_content):
-        segments, info = self.model.transcribe(file_path, beam_size=5)
-        print("Detected language '%s' with probability %f" % (info.language, info.language_probability))
-        full_transcription = ""
+        # TODO System tray
+        self.root.bind("<Configure>", self.hide_window)
+        self.root.protocol("WM_DELETE_WINDOW", self.exit_app)
         
-        with open(output_file, 'a') as f:
-            for segment in segments:
-                print(segment.text)
-                full_transcription += segment.text + " "
-                f.write(segment.text + "\n")
-        os.remove(file_path)
+        config_frame = tk.Frame(root)
+        config_frame.pack(pady=5)
         
-        if should_paste_content:
-            pyperclip.copy(full_transcription)
-            print("Transcription copied to clipboard.")
-            pyautogui.hotkey('ctrl', 'v')
+        #Model selection
+        self.model_size = tk.StringVar(value="large-v3")
+        tk.OptionMenu(config_frame, self.model_size, "tiny", "base", "small", "medium", "large-v3").grid(row=0, column=0)
+        
+        # Device selection
+        self.device_var = tk.StringVar(value="cuda")
+        tk.OptionMenu(config_frame, self.device_var, "cpu", "cuda").grid(row=0, column=1)
 
-        return full_transcription
-    
-    def run(self, output_file="transcription.txt", file_path=None):
-        if file_path:
-            print(f"Transcribing file: {file_path}")
-            self.transcribe_audio(file_path, output_file, False)
+        # Compute Type selection
+        self.compute_type_var = tk.StringVar(value="float16")
+        tk.OptionMenu(config_frame, self.compute_type_var, "float32", "float16", "int8_float16", "int8").grid(row=0, column=2)
+        
+        # Compute Type selection
+        self.language = tk.StringVar(value="pt")
+        tk.OptionMenu(config_frame, self.language, "pt", "en").grid(row=0, column=3)
+
+        # Toggle model activation
+        self.toggle_model_button = tk.Button(config_frame, text="Ativar Modelo", command=self.toggle_model)
+        self.toggle_model_button.grid(row=0, column=4)
+
+        # Control buttons
+        button_frame = tk.Frame(root)
+        button_frame.pack(pady=5)
+        
+        self.start_button = tk.Button(button_frame, text="Iniciar Gravação", command=self.start_recording, state=tk.DISABLED)
+        self.start_button.grid(row=0, column=0)
+        self.stop_button = tk.Button(button_frame, text="Parar Gravação", command=self.stop_recording, state=tk.DISABLED)
+        self.stop_button.grid(row=0, column=1)
+        
+        self.copy_button = tk.Button(button_frame, text="Copiar Texto", command=self.copy_text)
+        self.copy_button.grid(row=0, column=2)
+
+        self.select_file_button = tk.Button(button_frame, text="Selecionar Arquivo de Áudio", command=self.select_audio_file)
+        self.select_file_button.grid(row=0, column=3)
+        
+        self.status_label = tk.Label(root, text="Status: Parado")
+        self.status_label.pack(pady=5)
+
+        self.text_area = scrolledtext.ScrolledText(root, width=80, height=20)
+        self.text_area.pack(padx=10, pady=10)
+
+        self.transcriber = None
+        self.is_running = False
+        self.tray_icon = None
+
+        # Update transcription
+        self.update_text_area()
+        
+    def toggle_model(self):
+        if self.transcriber is None:
+            device = self.device_var.get()
+            compute_type = self.compute_type_var.get()
+            model_size = self.model_size.get()
+            language = self.language.get()
+            
+            try:
+                self.transcriber = LiveWhisperTranscriber(model_size=model_size, device=device, compute_type=compute_type, language=language)
+                self.toggle_model_button.config(text="Desativar Modelo")
+                self.start_button.config(state=tk.NORMAL)
+                self.copy_button.config(state=tk.NORMAL)
+                self.select_file_button.config(state=tk.NORMAL)
+
+                # Desabilitar opções
+                for widget in [self.device_var, self.compute_type_var]:
+                    widget.set(widget.get())  # força o valor atual
+                for child in self.root.winfo_children():
+                    if isinstance(child, tk.OptionMenu):
+                        child.config(state=tk.DISABLED)
+            except Exception as e:
+                self.status_label.config(text=f"Erro ao iniciar modelo: {e}")
         else:
-            print(f"Press {self.assigned_key} to start/stop recording")
-            while True:
-                recording = self.record_audio()
-                temp_file_path = self.save_temp_audio(recording)
-                self.transcribe_audio(temp_file_path, output_file, True)
+            self.transcriber.shutdown()
+            self.transcriber = None
+            self.toggle_model_button.config(text="Ativar Modelo")
+            self.start_button.config(state=tk.DISABLED)
+            self.stop_button.config(state=tk.DISABLED)
+            self.copy_button.config(state=tk.DISABLED)
+            self.select_file_button.config(state=tk.DISABLED)
+
+            # Reabilita opções
+            for child in self.root.winfo_children():
+                if isinstance(child, tk.OptionMenu):
+                    child.config(state=tk.NORMAL)
+                
+    def start_recording(self):
+        if not self.is_running:
+            self.is_running = True
+            self.start_button.config(state=tk.DISABLED)
+            self.stop_button.config(state=tk.NORMAL)
+            self.status_label.config(text="Status: Gravando...")
+
+            self.transcriber.running = True
+            self.transcriber.run(output_file="transcription.txt")
+            
+    def stop_recording(self):
+        if self.is_running and self.transcriber:
+            self.transcriber.running = False
+            self.is_running = False
+            self.start_button.config(state=tk.NORMAL)
+            self.stop_button.config(state=tk.DISABLED)
+            self.status_label.config(text="Status: Parado")
+
+    def select_audio_file(self):
+        filetypes = (("MP3 files","*.mp3"), ("WAV files", "*.wav"), ("All files", "*.*"))
+        filepath = filedialog.askopenfilename(title="Selecione um arquivo de áudio", filetypes=filetypes)
+        if filepath and self.transcriber:
+            self.status_label.config(text="Status: Transcrevendo arquivo...")
+            threading.Thread(target=self.transcriber.transcribe_audio, args=(filepath, "transcription.txt"), name="Thread-Transcribe-File").start()
+
+    def copy_text(self):
+        content = self.text_area.get(1.0, tk.END)
+        pyperclip.copy(content.strip())
+        messagebox.showinfo("Copiado", "Transcrição copiada para a área de transferência!")
+
+    def update_text_area(self):
+        try:
+            if os.path.exists("transcription.txt"):
+                # Number of lines currently visible from the bottom
+                total_lines = int(self.text_area.index('end-1c').split('.')[0])
+                last_visible_index = self.text_area.index('@0,%d' % self.text_area.winfo_height())
+                last_visible_line = int(last_visible_index.split('.')[0])
+                lines_from_bottom = total_lines - last_visible_line
+
+                try:
+                    with open("transcription.txt", "r", encoding="utf-8") as file:
+                        content = file.read()
+                except Exception as e:
+                    print(f"[ERROR] Failed to read transcription.txt: {e}")
+                    content = ""
+
+                try:
+                    self.text_area.delete(1.0, tk.END)
+                    self.text_area.insert(tk.END, content)
+                    
+                    # Restore view by line offset from bottom
+                    total_lines_new = int(self.text_area.index('end-1c').split('.')[0])
+                    line_to_show = max(total_lines_new - lines_from_bottom, 1)
+                    self.text_area.see(f"{line_to_show}.0")
+                except Exception as e:
+                    print(f"[ERROR] Failed to update text widget: {e}")
+        except Exception as e:
+            print(f"[ERROR] update_text_area outer exception: {e}")
+
+        self.root.after(2000, self.update_text_area)
+
+    def setup_tray_icon(self):
+        image = Image.new('RGB', (64, 64), color=(0, 0, 255))
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((16, 16, 48, 48), fill=(255, 255, 255))
+
+        self.tray_icon = pystray.Icon("Whisper Voice", image, "Whisper Voice", menu=pystray.Menu(
+            pystray.MenuItem("Restaurar", self.show_window),
+            pystray.MenuItem("Sair", self.exit_app)
+        ))
+
+        threading.Thread(target=self.tray_icon.run, daemon=True).start()
+
+    def hide_window(self, event):
+        if root.state() == 'iconic':
+            self.root.withdraw()
+            self.setup_tray_icon()
+
+    def show_window(self, icon=None, item=None):
+        self.root.deiconify()
+        if self.tray_icon:
+            self.tray_icon.stop()
+
+    def exit_app(self, icon=None, item=None):
+        if self.tray_icon:
+            self.tray_icon.stop()
+            
+        if self.transcriber:
+            self.transcriber.shutdown()
+        self.root.destroy()
 
 if __name__ == "__main__":
-    file_path = sys.argv[1] if len(sys.argv) > 1 else None
-    transcriber = WhisperVoice()
-    transcriber.run(file_path=file_path)
+    root = tk.Tk()
+    app = WhisperVoiceApp(root)
+    root.mainloop()
