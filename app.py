@@ -1,12 +1,12 @@
-from tkinter import scrolledtext, filedialog, messagebox
+from tkinter import filedialog, messagebox
 from PIL import Image, ImageDraw
 import tkinter as tk
 import threading
-import os
 import pyperclip
 import pystray
 
-from WhisperTranscriber import LiveWhisperTranscriber
+from app.transcription.whisper_transcriber import LiveWhisperTranscriber
+from app.ui.live_text_view import LiveTextViewer
 
 class WhisperVoiceApp:
     def __init__(self, root):
@@ -21,7 +21,7 @@ class WhisperVoiceApp:
         config_frame.pack(pady=5)
         
         #Model selection
-        self.model_size = tk.StringVar(value="large-v3")
+        self.model_size = tk.StringVar(value="medium")
         tk.OptionMenu(config_frame, self.model_size, "tiny", "base", "small", "medium", "large-v3").grid(row=0, column=0)
         
         # Device selection
@@ -29,7 +29,7 @@ class WhisperVoiceApp:
         tk.OptionMenu(config_frame, self.device_var, "cpu", "cuda").grid(row=0, column=1)
 
         # Compute Type selection
-        self.compute_type_var = tk.StringVar(value="float16")
+        self.compute_type_var = tk.StringVar(value="int8")
         tk.OptionMenu(config_frame, self.compute_type_var, "float32", "float16", "int8_float16", "int8").grid(row=0, column=2)
         
         # Compute Type selection
@@ -58,15 +58,12 @@ class WhisperVoiceApp:
         self.status_label = tk.Label(root, text="Status: Parado")
         self.status_label.pack(pady=5)
 
-        self.text_area = scrolledtext.ScrolledText(root, width=80, height=20)
-        self.text_area.pack(padx=10, pady=10)
-
         self.transcriber = None
         self.is_running = False
         self.tray_icon = None
 
         # Update transcription
-        self.update_text_area()
+        _ = LiveTextViewer(root, "transcription.txt")
         
     def toggle_model(self):
         if self.transcriber is None:
@@ -133,37 +130,6 @@ class WhisperVoiceApp:
         content = self.text_area.get(1.0, tk.END)
         pyperclip.copy(content.strip())
         messagebox.showinfo("Copiado", "Transcrição copiada para a área de transferência!")
-
-    def update_text_area(self):
-        try:
-            if os.path.exists("transcription.txt"):
-                # Number of lines currently visible from the bottom
-                total_lines = int(self.text_area.index('end-1c').split('.')[0])
-                last_visible_index = self.text_area.index('@0,%d' % self.text_area.winfo_height())
-                last_visible_line = int(last_visible_index.split('.')[0])
-                lines_from_bottom = total_lines - last_visible_line
-
-                try:
-                    with open("transcription.txt", "r", encoding="utf-8") as file:
-                        content = file.read()
-                except Exception as e:
-                    print(f"[ERROR] Failed to read transcription.txt: {e}")
-                    content = ""
-
-                try:
-                    self.text_area.delete(1.0, tk.END)
-                    self.text_area.insert(tk.END, content)
-                    
-                    # Restore view by line offset from bottom
-                    total_lines_new = int(self.text_area.index('end-1c').split('.')[0])
-                    line_to_show = max(total_lines_new - lines_from_bottom, 1)
-                    self.text_area.see(f"{line_to_show}.0")
-                except Exception as e:
-                    print(f"[ERROR] Failed to update text widget: {e}")
-        except Exception as e:
-            print(f"[ERROR] update_text_area outer exception: {e}")
-
-        self.root.after(2000, self.update_text_area)
 
     def setup_tray_icon(self):
         image = Image.new('RGB', (64, 64), color=(0, 0, 255))
