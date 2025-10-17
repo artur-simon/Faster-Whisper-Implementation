@@ -69,10 +69,6 @@ def select_better_word(word1: Word, word2: Word) -> Word:
     return word1 if word1.probability > word2.probability else word2
 
 
-# TODO não preciso verificar isso, só pegar o offset da sequencia,
-# se a palavra tiver start menor que tamanho do offset, é provavel estar de overlap
-# mas ta, depois disso ainda tenho que voltar pra ver se realmente teve overlap com palavras passadas,
-# a nova palavra pode estar na região de overlap mas não ser.
 def is_in_overlap_region(word: Word, overlap_words: List[Word]) -> bool:
     return any(word.start < overlap_word.end for overlap_word in overlap_words)
 

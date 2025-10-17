@@ -1,5 +1,5 @@
 from faster_whisper import WhisperModel
-from typing import List, Optional
+from typing import Iterator, List, Optional
 from app.models import Word, TranscriptionSegment, TranscriptionConfig
 
 
@@ -16,7 +16,7 @@ class TranscriptionEngine:
         self, 
         audio_path: str, 
         context_words: Optional[List[Word]] = None
-    ) -> List[TranscriptionSegment]:
+    ) -> Iterator[TranscriptionSegment]:
         
         transcribe_kwargs = {
             'vad_filter': self._config.vad_filter,
@@ -32,8 +32,9 @@ class TranscriptionEngine:
         
         segments, _ = self._model.transcribe(audio_path, **transcribe_kwargs)
         
-        return [
-            TranscriptionSegment(
+        for segment in segments:
+            yield TranscriptionSegment(
+                text=segment.text,
                 words=[
                     Word(
                         text=word.word,
@@ -45,8 +46,6 @@ class TranscriptionEngine:
                 ] if segment.words else [],
                 no_speech_probability=segment.no_speech_prob
             )
-            for segment in segments
-        ]
     
     def release(self) -> None:
         if hasattr(self, '_model') and self._model is not None:

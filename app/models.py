@@ -12,6 +12,7 @@ class Word:
 
 @dataclass(frozen=True)
 class TranscriptionSegment:
+    text: str
     words: List[Word]
     no_speech_probability: float
 
@@ -23,7 +24,7 @@ class AudioChunk:
     offset: float
 
 
-@dataclass(frozen=True)
+@dataclass()
 class TranscriptionConfig:
     model_size: str
     device: str
@@ -35,4 +36,6 @@ class TranscriptionConfig:
     no_speech_threshold: float
     vad_filter: bool = True
     word_timestamps: bool = True
+    microphone_index: int = 0
+    should_paste_content: bool = False
 

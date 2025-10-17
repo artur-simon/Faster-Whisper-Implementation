@@ -1,7 +1,7 @@
 import sounddevice as sd
 import numpy as np
 import threading
-from typing import Optional
+from typing import Optional, List, Dict
 
 
 class AudioBuffer:
@@ -32,13 +32,39 @@ class AudioBuffer:
 
 
 class AudioCapture:
-    def __init__(self, sample_rate: int, channels: int = 1, dtype: str = "float32"):
+    def __init__(
+        self,
+        sample_rate: int,
+        channels: int = 1,
+        dtype: str = "float32",
+        device_index: int = 0,
+    ):
         self._sample_rate = sample_rate
         self._channels = channels
         self._dtype = dtype
+        self._device_index = device_index
         self._buffer = AudioBuffer(sample_rate, dtype)
         self._stream: Optional[sd.InputStream] = None
         self._running = False
+
+    @staticmethod
+    def get_input_devices() -> List[Dict[str, any]]:
+        devices = sd.query_devices()
+        input_devices = []
+        for idx, device in enumerate(devices):
+            if device["max_input_channels"] > 0:
+                input_devices.append(
+                    {
+                        "index": idx,
+                        "name": device["name"],
+                        "channels": device["max_input_channels"],
+                    }
+                )
+        return input_devices
+
+    @staticmethod
+    def get_default_input_device_id() -> any:
+        return sd.default.device[0]
 
     def start(self) -> None:
         if self._running:
@@ -55,6 +81,7 @@ class AudioCapture:
             channels=self._channels,
             dtype=self._dtype,
             callback=callback,
+            device=self._device_index,
         )
         self._stream.start()
 
@@ -71,5 +98,6 @@ class AudioCapture:
     def has_data(self, minimum_samples: int) -> bool:
         return self._buffer.get_length() >= minimum_samples
 
-    def clear_buffer(self) -> None:
+    def release(self) -> None:
+        self.stop()
         self._buffer.clear()
