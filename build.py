@@ -5,9 +5,11 @@ assets_path = os.path.join(site_packages, "faster_whisper", "assets")
 
 PyInstaller.__main__.run([
     'app.py',
-    '--onefile',
+    '--noconsole',
     '--icon=wisp.ico',
     '--add-data=wisp.ico;.',
     f'--add-data={assets_path};faster_whisper/assets',
-    '--name=WispLive'
+    '--name=WispLive',
+    '--hidden-import=scipy.signal',
+    #'--noconfirm'
 ])
