@@ -77,7 +77,7 @@ Settings are stored in `config.json`:
   "device": "cuda",
   "compute_type": "float32",
   "language": "pt",
-  "microphone_index": 2,
+  "mic_id": 2,
   "should_paste_content": false
 }
 ```
@@ -88,7 +88,7 @@ Settings are stored in `config.json`:
 - **device**: `cpu`, `cuda`
 - **compute_type**: `float32`, `float16`, `int8_float16`, `int8`
 - **language**: Language code (e.g., `en`, `pt`) or `auto` for detection
-- **microphone_index**: Audio input device index
+- **mic_id**: Audio input device index
 - **should_paste_content**: Auto-paste transcribed text when true
 
 ### GUI Controls
@@ -147,20 +147,20 @@ Test files:
 WispLive/
 ├── app/
 │   ├── audio/
-│   │   └── audio_capture.py       # Audio capture with buffering
+│   │   └── audio_capture.py            # Audio capture with buffering
 │   ├── transcription/
-│   │   ├── orchestrator.py        # Main transcription pipeline
-│   │   ├── transcription_engine.py # Whisper engine wrapper
-│   │   ├── whisper_transcriber.py # High-level transcriber API
-│   │   └── overlap_resolver.py    # Chunk overlap handling
+│   │   ├── orchestrator.py             # Main transcription pipeline
+│   │   ├── transcription_engine.py     # Whisper engine wrapper
+│   │   ├── transcription_controller.py # High-level transcriber API
+│   │   └── overlap_resolver.py         # Chunk overlap handling
 │   ├── ui/
-│   │   ├── main_window.py         # Main GUI window
-│   │   └── live_text_view.py      # Live text display widget
+│   │   ├── main_window.py              # Main GUI window
+│   │   └── live_text_view.py           # Live text display widget
 │   └── utils/
-│       ├── config_manager.py      # Configuration persistence
-│       ├── document_writer.py     # Output file writing
-│       ├── file_utils.py          # Temporary file handling
-│       └── os_print.py            # OS-specific printing
+│       ├── config_manager.py           # Configuration persistence
+│       ├── document_writer.py          # Output file writing
+│       ├── file_utils.py               # Temporary file handling
+│       └── os_print.py                 # OS-specific printing
 ├── tests/                         # Test suite
 ├── app.py                         # Application entry point
 ├── build.py                       # PyInstaller build script

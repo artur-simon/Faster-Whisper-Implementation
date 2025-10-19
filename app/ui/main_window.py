@@ -5,27 +5,31 @@ import tkinter as tk
 import pyperclip
 import pystray
 import threading
-import subprocess
-import sys
-import os
+import logging
 
-from app.transcription.whisper_transcriber import LiveWhisperTranscriber
+from app.transcription.transcription_controller import TranscriptionController
 from app.ui.live_text_view import LiveTextViewer
+from app.ui.logging_window import LoggingWindow
 from app.audio.audio_capture import AudioCapture
 from app.utils.config_manager import ConfigManager
+from app.utils.logging_manager import LoggingManager
+
+logger = logging.getLogger("app.ui.main_window")
 
 
 class MainWindow:
     def __init__(self, root):
         self.root = root
         self.root.title("WispLive")
-        self.root.iconbitmap(default="./wisp.ico")
+        self.root.iconbitmap(default=self.get_icon_path())
         self.root.protocol("WM_DELETE_WINDOW", self.exit_app)
         
+        logger.info("Initializing WispLive main window")
         self.config_manager = ConfigManager()
         config = self.config_manager.load_config()
+        logger.debug(f"Loaded configuration: {config}")
         
-        self.configure_menu_bar(root, None)
+        self.configure_menu_bar(root, config)
         
         configs_frame = tk.Frame(root)
         configs_frame.pack(pady=5, padx=5, fill='x')
@@ -39,6 +43,9 @@ class MainWindow:
         self.transcriber = None
         self.is_running = False
         self.tray_icon = None
+        
+        self.logging_manager = LoggingManager.get_instance()
+        self.logging_window = None
     
     
     def configure_menu_bar(self, root, config):
@@ -79,11 +86,15 @@ class MainWindow:
         view_menu.add_command(label="Show/Hide Timestamps", command=lambda: print("Timestamps toggle"), state=tk.DISABLED)
         view_menu.add_command(label="Word Confidence Heatmap", command=lambda: print("Confidence heatmap"), state=tk.DISABLED)
         view_menu.add_command(label="Real-Time Highlighting", command=lambda: print("Highlighting"), state=tk.DISABLED)
-        view_menu.add_command(label="Show console", command=self.show_console)
+        view_menu.add_command(label="Toggle Dark Mode", state=tk.DISABLED)
         menubar.add_cascade(label="View", menu=view_menu)
 
         # ===== Tools Menu =====
         tools_menu = tk.Menu(menubar, tearoff=0)
+        self.vad_filter_var = tk.BooleanVar(value=config.get('vad_filter', False))
+        tools_menu.add_checkbutton(label="Use VAD filter", 
+                                   command=lambda: self.on_config_value_change(vad_filter=self.vad_filter_var.get()), 
+                                   variable=self.vad_filter_var)
         tools_menu.add_command(label="Language Auto-Detect", command=lambda: print("Auto-detect language"), state=tk.DISABLED)
         tools_menu.add_command(label="Speaker Diarization", command=lambda: print("Speaker diarization"), state=tk.DISABLED)
         tools_menu.add_command(label="Toggle Punctuation Restoration", command=lambda: print("Punctuation restoration"), state=tk.DISABLED)
@@ -98,7 +109,16 @@ class MainWindow:
         settings_menu.add_command(label="Load Preset", command=lambda: print("Load preset"), state=tk.DISABLED)
         settings_menu.add_command(label="Audio Input Routing", command=lambda: print("Audio routing"), state=tk.DISABLED)
         settings_menu.add_command(label="Hotkeys", command=lambda: print("Hotkeys"), state=tk.DISABLED)
-        settings_menu.add_command(label="Logging Verbosity", command=lambda: print("Logging level"), state=tk.DISABLED)
+        
+        logging_menu = tk.Menu(settings_menu, tearoff=0)
+        logging_menu.add_command(label="Show Logging Console", command=self.show_logging_window)
+        logging_menu.add_separator()
+        logging_menu.add_command(label="Set Level: DEBUG", command=lambda: self.set_log_level("DEBUG"))
+        logging_menu.add_command(label="Set Level: INFO", command=lambda: self.set_log_level("INFO"))
+        logging_menu.add_command(label="Set Level: WARNING", command=lambda: self.set_log_level("WARNING"))
+        logging_menu.add_command(label="Set Level: ERROR", command=lambda: self.set_log_level("ERROR"))
+        settings_menu.add_cascade(label="Logging Verbosity", menu=logging_menu)
+        
         menubar.add_cascade(label="Settings", menu=settings_menu)
 
         # ===== Help Menu =====
@@ -110,7 +130,7 @@ class MainWindow:
         menubar.add_cascade(label="Help", menu=help_menu)
         
         root.config(menu=menubar)
-     
+        
     
     def configure_model_toolbar(self, root, config):
         model_frame = tk.Frame(root)
@@ -135,8 +155,8 @@ class MainWindow:
         config_frame = tk.Frame(root)
         config_frame.pack(side="right", anchor='e')
         
-        self.language_var = tk.StringVar(value=config.get("language", "pt"))
-        self.language_var.trace_add("write", self.on_config_value_change)
+        self.language_var = tk.StringVar(value=config.get("language", "en"))
+        self.language_var.trace_add("write", lambda *args:self.on_config_value_change(language=self.language_var.get()))
         tk.OptionMenu(config_frame, self.language_var, "pt", "en").grid(row=0, column=3)
         
         self.input_devices = AudioCapture.get_input_devices()
@@ -147,19 +167,25 @@ class MainWindow:
         
         if mic_names:
             default_id = AudioCapture.get_default_input_device_id()
-            device = next((d for d in self.input_devices if d["index"] == default_id), None)
-            if device:
-                selected_mic = f"{device['index']}: {device['name']}"
+            selected_mic = next(
+                (f"{d['index']}: {d['name']}" for d in self.input_devices if d["index"] == default_id),
+                None
+            )
                 
-        saved_mic_idx = config.get("microphone_index")
-        if saved_mic_idx is not None:
-            for name, idx in self.device_index_map.items():
-                if idx == saved_mic_idx:
-                    selected_mic = name
-                    break
+        saved_mic_idx = config.get("mic_id")
+        selected_mic = next(
+            (name for name, idx in self.device_index_map.items() if idx == saved_mic_idx),
+            selected_mic
+        )
         
         self.microphone_var = tk.StringVar(value=selected_mic)
-        self.microphone_var.trace_add("write", self.on_config_value_change)
+        self.microphone_var.trace_add(
+            "write",
+            lambda *args: self.on_config_value_change(
+                mic_id=self.device_index_map.get(self.microphone_var.get())
+            )
+        )
+        
         mic_menu = (
             tk.OptionMenu(config_frame, self.microphone_var, *mic_names) 
             if mic_names 
@@ -191,7 +217,7 @@ class MainWindow:
             variable=self.should_paste_content_var,
             onvalue=1,
             offvalue=0,
-            command=self.on_config_value_change
+            command=lambda:self.on_config_value_change(should_paste_content=self.should_paste_content_var.get())
         )
         self.should_paste_content_checkbutton.grid(row=0, column=4)
         
@@ -199,29 +225,36 @@ class MainWindow:
         status_frame.pack(side="right", anchor="e")
         self.status_label = tk.Label(status_frame, text="Status: Stopped")
         self.status_label.grid(row=0, column=0)
-        
-        
-    def on_config_value_change(self, *kwargs):
+                
+    
+    def on_config_value_change(self, **kwargs):
         if(self.transcriber):
-            self.transcriber.update_input_config(
-                self.language_var.get(),
-                self.device_index_map.get(self.microphone_var.get()),
-                self.should_paste_content_var.get()
+            self.transcriber.update_input_config(**kwargs)
+        
+        
+    def get_icon_path(self):
+        import sys, os
+        base_path = (
+            sys._MEIPASS if getattr(sys, 'frozen', False) 
+            else os.path.dirname(os.path.abspath(sys.argv[0]))
         )
+        return os.path.join(base_path, "wisp.ico")
     
-    
+        
     def toggle_model(self):
         if self.transcriber is None:            
             try:
-                self.transcriber = LiveWhisperTranscriber(
+                logger.info(f"Activating model: {self.model_size.get()} on {self.device_var.get()}")
+                self.transcriber = TranscriptionController(
                     device = self.device_var.get(),
                     compute_type = self.compute_type_var.get(),
                     model_size = self.model_size.get(),
                     language = self.language_var.get(),
-                    microphone_index = self.device_index_map.get(self.microphone_var.get()),
+                    mic_id = self.device_index_map.get(self.microphone_var.get()),
                     should_paste_content = self.should_paste_content_var.get()
                 )
                 
+                logger.info("Model activated successfully")
                 self.toggle_model_button.config(text="Release Model")
                 self.start_button.config(state=tk.NORMAL)
                 self.select_file_button.config(state=tk.NORMAL)
@@ -229,11 +262,14 @@ class MainWindow:
                     if isinstance(child, tk.OptionMenu):
                         child.config(state=tk.DISABLED)
             except Exception as e:
-                self.status_label.config(text=f"Failed to initialize model: {e}")
+                logger.error(f"Failed to initialize model: {e}", exc_info=True)
+                messagebox.showerror("Error", f"Failed to initialize model, refer to logs for more details.")
         else:
+            logger.info("Releasing model")
             self.transcriber.shutdown()
             self.transcriber = None
             
+            logger.info("Model released")
             self.toggle_model_button.config(text="Activate Model")
             self.start_button.config(state=tk.DISABLED)
             self.select_file_button.config(state=tk.DISABLED)
@@ -244,28 +280,34 @@ class MainWindow:
 
     def toggle_recording(self):
         if not self.is_running:
+            logger.info("Starting recording")
             self.is_running = True
             self.transcriber.run(output_file="transcription.txt")
             self.status_label.config(text="Status: Recording...")
             self.start_button.config(text="Stop Recording")
         elif self.transcriber:
+            logger.info("Stopping recording")
             self.is_running = False
             self.transcriber.stop()
             self.status_label.config(text="Status: Stopped")
             self.start_button.config(text="Start Recording")
 
-
+        
     def select_audio_file(self):
         filetypes = (("MP3 files","*.mp3"), ("WAV files", "*.wav"), ("All files", "*.*"))
         filepath = filedialog.askopenfilename(title="Selecione um arquivo de áudio", filetypes=filetypes)
         if filepath and self.transcriber:
+            logger.info(f"Selected audio file for transcription: {filepath}")
             self.status_label.config(text="Status: Transcribing file...")
             def transcribe_file():
                 try:
                     self.transcriber.transcribe_audio_file(filepath, "transcription.txt")
+                    logger.info(f"File transcription completed: {filepath}")
                     self.root.after(0, lambda: self.status_label.config(text="Status: Transcrição concluída"))
                 except Exception as e:
-                    self.root.after(0, lambda: self.status_label.config(text=f"Error: {e}"))
+                    logger.error(f"File transcription failed: {e}", exc_info=True)
+                    messagebox.showerror("Error", f"File transcription failed, refer to logs for more details.")
+                    self.root.after(0, lambda: self.status_label.config(text=f"Error"))
             threading.Thread(target=transcribe_file, name="Main - transcribe_audio_file").start()
 
 
@@ -275,14 +317,18 @@ class MainWindow:
             "device": self.device_var.get(),
             "compute_type": self.compute_type_var.get(),
             "language": self.language_var.get(),
-            "microphone_index": self.device_index_map.get(self.microphone_var.get()),
+            "mic_id": self.device_index_map.get(self.microphone_var.get()),
             "should_paste_content": self.should_paste_content_var.get(),
+            "vad_filter": self.vad_filter_var.get(),
         }
         try:
+            logger.info("Saving configuration")
             self.config_manager.save_config(config)
+            logger.info("Configuration saved successfully")
             messagebox.showinfo("Sucess", "Configuration saved!")
         except Exception as e:
-            messagebox.showerror("Error", f"Error saving config: {e}")
+            messagebox.showerror("Error", f"Error saving config")
+            logger.error(f"Error saving config: {e}", exc_info=True)
 
 
     def copy_text(self):
@@ -315,24 +361,29 @@ class MainWindow:
             self.tray_icon.stop()
     
     
-    def show_console(self):
-        base = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else sys.argv[0])
-        main_path = os.path.join(base, "app.py")
-
-        subprocess.Popen(
-            [sys.executable, main_path, "--console"],
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-            cwd=base
-        )
-
+    def show_logging_window(self):
+        if self.logging_window is None:
+            self.logging_window = LoggingWindow(self.root, self.logging_manager.log_queue)
+        self.logging_window.show()
     
-
+    
+    def set_log_level(self, level_name: str):
+        import logging
+        level = getattr(logging, level_name)
+        self.logging_manager.set_log_level(level)
+    
+    
     def exit_app(self):
+        logger.info("Shutting down application")
         if self.tray_icon:
             self.tray_icon.stop()
+        
+        if self.logging_window:
+            self.logging_window.destroy()
             
         if self.transcriber:
             self.transcriber.shutdown()
             self.transcriber = None
+        logger.info("Application shutdown complete")
         self.root.quit()
 

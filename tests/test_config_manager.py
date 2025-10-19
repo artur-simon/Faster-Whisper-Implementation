@@ -27,7 +27,7 @@ class TestConfigManager:
             "device": "cpu",
             "compute_type": "float32",
             "language": "en",
-            "microphone_index": 5,
+            "mic_id": 5,
         }
         
         manager.save_config(test_config)
@@ -63,5 +63,5 @@ class TestConfigManager:
         assert ConfigManager.DEFAULT_CONFIG["device"] == "cuda"
         assert ConfigManager.DEFAULT_CONFIG["compute_type"] == "int8"
         assert ConfigManager.DEFAULT_CONFIG["language"] == "pt"
-        assert ConfigManager.DEFAULT_CONFIG["microphone_index"] is None
+        assert ConfigManager.DEFAULT_CONFIG["mic_id"] is None
 

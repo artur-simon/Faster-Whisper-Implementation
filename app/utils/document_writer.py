@@ -1,7 +1,10 @@
 from typing import List
+import logging
 from app.models import TranscriptionConfig, Word
 
 from app.utils.os_print import paste_content
+
+logger = logging.getLogger("app.utils.document_writer")
 
 
 class TranscriptionWriter:
@@ -27,8 +30,12 @@ class TranscriptionWriter:
     def write_string(self, text: str) -> None:
         self.write_string_to_file(text)
         if self._config.should_paste_content:
+            logger.debug(f"Pasting content: {text[:50]}...")
             paste_content(text)
 
     def write_string_to_file(self, text: str) -> None:
-        with open(self._output_path, "a", encoding=self._encoding) as f:
-            f.write(text + "")
+        try:
+            with open(self._output_path, "a", encoding=self._encoding) as f:
+                f.write(text + "")
+        except Exception as e:
+            logger.error(f"Error writing to file {self._output_path}: {e}", exc_info=True)

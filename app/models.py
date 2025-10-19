@@ -36,6 +36,6 @@ class TranscriptionConfig:
     no_speech_threshold: float
     vad_filter: bool = True
     word_timestamps: bool = True
-    microphone_index: int = 0
+    mic_id: int = 0
     should_paste_content: bool = False
 

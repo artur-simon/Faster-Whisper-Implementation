@@ -48,7 +48,7 @@ class TestTranscriptionEngine:
         mock_whisper_model.return_value = mock_model_instance
         
         engine = TranscriptionEngine(config)
-        segments = list(engine.transcribe_file("test.wav"))
+        segments = list(engine.transcribe_audio("test.wav"))
         
         assert len(segments) == 1
         assert len(segments[0].words) == 1
@@ -66,7 +66,7 @@ class TestTranscriptionEngine:
             Word(text=" hello", start=0.0, end=1.0, probability=0.9)
         ]
         
-        list(engine.transcribe_file("test.wav", context_words=context_words))
+        list(engine.transcribe_audio("test.wav", context_words=context_words))
         
         call_kwargs = mock_model_instance.transcribe.call_args[1]
         assert 'initial_prompt' in call_kwargs

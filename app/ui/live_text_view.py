@@ -1,5 +1,8 @@
 import os
 import tkinter as tk
+import logging
+
+logger = logging.getLogger("app.ui.live_text_view")
 
 
 class LiveTextViewer:
@@ -29,18 +32,19 @@ class LiveTextViewer:
 
     def update(self):
         try:
-            size = os.path.getsize(self.path)
-            if size < self.last_size:
-                self.text.delete("1.0", tk.END)
-                self.last_size = 0
-            if size > self.last_size:
-                with open(self.path, "r", encoding="utf-8") as f:
-                    f.seek(self.last_size)
-                    new_data = f.read()
-                self.text.insert(tk.END, new_data)
-                self.last_size = size
-                if self.follow:
-                    self.text.see(tk.END)
+            if(os.path.exists(self.path)):
+                size = os.path.getsize(self.path)
+                if size < self.last_size:
+                    self.text.delete("1.0", tk.END)
+                    self.last_size = 0
+                if size > self.last_size:
+                    with open(self.path, "r", encoding="utf-8") as f:
+                        f.seek(self.last_size)
+                        new_data = f.read()
+                    self.text.insert(tk.END, new_data)
+                    self.last_size = size
+                    if self.follow:
+                        self.text.see(tk.END)
         except Exception as e:
-            print(f"[ERROR] {e}")
+            logger.error(f"Error updating live text view: {e}", exc_info=True)
         self.root.after(500, self.update)
