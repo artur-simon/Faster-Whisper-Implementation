@@ -52,7 +52,7 @@ class TranscriptionEngine:
                     )
                     for word in segment.words
                 ] if segment.words else [],
-                no_speech_probability=segment.no_speech_prob
+                no_speech_prob=segment.no_speech_prob
             )
     
     def release(self) -> None:

@@ -146,7 +146,7 @@ class TranscriptionOrchestrator:
     def _extract_words_from_segments(self, segments) -> List[Word]:
         words = []
         for segment in segments:
-            if segment.no_speech_probability < self._config.no_speech_threshold:
+            if segment.no_speech_prob < self._config.no_speech_threshold:
                 words.extend(segment.words)
         return words
     

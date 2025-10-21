@@ -52,14 +52,14 @@ class TranscriptionController:
         if self._engine is None:
             self._engine = TranscriptionEngine(self._config)
 
-        writer = TranscriptionWriter(output_file)
+        writer = TranscriptionWriter(output_file, self._config)
 
         try:
             segments = self._engine.transcribe_audio(audio_path)
             segment_count = 0
             for segment in segments:
-                if segment.no_speech_probability < self._config.no_speech_threshold:
-                    writer.write_string_to_file(segment.text, False)
+                if segment.no_speech_prob < self._config.no_speech_threshold:
+                    writer.write_string_to_file(segment.text)
                     writer.write_string_to_file("\n")
                     segment_count += 1
             logger.info(f"Transcription completed: {segment_count} segments processed")

@@ -14,7 +14,7 @@ class Word:
 class TranscriptionSegment:
     text: str
     words: List[Word]
-    no_speech_probability: float
+    no_speech_prob: float
 
 
 @dataclass(frozen=True)
