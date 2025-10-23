@@ -33,13 +33,13 @@ class WhisperVoice:
                 return False
     
     def record_audio(self):
-        recording = np.array([], dtype='float64').reshape(0, 2)
+        recording = np.array([], dtype='float32').reshape(0, 2)
         frames_per_buffer = int(self.sample_rate * 0.1)
         
         with keyboard.Listener(on_press=self.on_press) as listener:
             while True:
                 if self.is_recording:
-                    chunk = sd.rec(frames_per_buffer, samplerate=self.sample_rate, channels=2, dtype='float64')
+                    chunk = sd.rec(frames_per_buffer, samplerate=self.sample_rate, channels=2, dtype='float32')
                     sd.wait()
                     recording = np.vstack([recording, chunk])
                 if not self.is_recording and len(recording) > 0:
@@ -57,7 +57,7 @@ class WhisperVoice:
         print("Detected language '%s' with probability %f" % (info.language, info.language_probability))
         full_transcription = ""
         
-        with open(output_file, 'a') as f:
+        with open(output_file, 'w', encoding="utf-8") as f:
             for segment in segments:
                 print(segment.text)
                 full_transcription += segment.text + " "
