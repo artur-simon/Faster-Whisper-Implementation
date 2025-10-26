@@ -9,31 +9,8 @@ logger = logging.getLogger("app.transcription.controller")
 
 
 class TranscriptionController:
-    def __init__(
-        self,
-        model_size: str = "large-v3",
-        sample_rate: int = 44100,
-        device: str = "cuda",
-        compute_type: str = "float16",
-        language: str = "auto",
-        chunk_duration: float = 5.0,
-        overlap_duration: float = 1.0,
-        no_speech_threshold: float = 0.6,
-        mic_id: Optional[int] = None,
-        should_paste_content: bool = False
-    ):
-        self._config = TranscriptionConfig(
-            model_size=model_size,
-            device=device,
-            compute_type=compute_type,
-            language=language,
-            sample_rate=sample_rate,
-            chunk_duration=chunk_duration,
-            overlap_duration=overlap_duration,
-            no_speech_threshold=no_speech_threshold,
-            mic_id=mic_id,
-            should_paste_content=should_paste_content,
-        )
+    def __init__(self, config: TranscriptionConfig):
+        self._config = config
         self._orchestrator = None
         self._engine = None
 

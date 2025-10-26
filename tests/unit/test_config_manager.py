@@ -16,7 +16,7 @@ class TestConfigManager:
     def test_load_config_missing_file(self, temp_config_file):
         os.remove(temp_config_file)
         manager = ConfigManager(temp_config_file)
-        config = manager.load_config()
+        config = manager.load_config_from_file()
         
         assert config == ConfigManager.DEFAULT_CONFIG
     
@@ -28,21 +28,27 @@ class TestConfigManager:
             "compute_type": "float32",
             "language": "en",
             "mic_id": 5,
+            "vad_filter": True,
+            "sample_rate" : 44100,
+            "chunk_duration" : 5.0,
+            "overlap_duration" : 1.0,
+            "no_speech_threshold" : 0.6,
+            "should_paste_content" : False
         }
         
-        manager.save_config(test_config)
-        loaded_config = manager.load_config()
+        manager.save_config_to_file(test_config)
+        manager.load_config_from_file()
         
-        assert loaded_config == test_config
+        assert manager.get_config_dict() == test_config
     
-    def test_load_config_with_invalid_json(self, temp_config_file):
+    def test_load_config_with_invalid_json_should_return_default(self, temp_config_file):
         with open(temp_config_file, "w") as f:
             f.write("invalid json {{{")
         
         manager = ConfigManager(temp_config_file)
-        config = manager.load_config()
+        manager.load_config_from_file()
         
-        assert config == ConfigManager.DEFAULT_CONFIG
+        assert manager.get_config_dict() == ConfigManager.DEFAULT_CONFIG
     
     def test_save_config_partial_update(self, temp_config_file):
         manager = ConfigManager(temp_config_file)
@@ -51,8 +57,9 @@ class TestConfigManager:
             "device": "cuda",
         }
         
-        manager.save_config(partial_config)
-        loaded_config = manager.load_config()
+        manager.save_config_to_file(partial_config)
+        manager.load_config_from_file()
+        loaded_config = manager.get_config_dict()
         
         assert loaded_config["model_size"] == "tiny"
         assert loaded_config["device"] == "cuda"

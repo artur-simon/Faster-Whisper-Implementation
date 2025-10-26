@@ -35,7 +35,6 @@ class TranscriptionConfig:
     overlap_duration: float
     no_speech_threshold: float
     vad_filter: bool = True
-    word_timestamps: bool = True
     mic_id: int = 0
     should_paste_content: bool = False
 

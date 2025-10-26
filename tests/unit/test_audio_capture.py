@@ -6,13 +6,13 @@ from app.audio.audio_capture import AudioBuffer, AudioCapture
 class TestAudioBuffer:
     def test_buffer_initialization(self):
         buffer = AudioBuffer(sample_rate=16000)
-        assert buffer.get_length() == 0
+        assert buffer.get_buffer_size() == 0
     
     def test_append_data(self):
         buffer = AudioBuffer(sample_rate=16000)
         data = np.zeros((100, 1), dtype="float32")
         buffer.append(data)
-        assert buffer.get_length() == 100
+        assert buffer.get_buffer_size() == 100
     
     def test_extract_chunk_success(self):
         buffer = AudioBuffer(sample_rate=16000)
@@ -22,7 +22,7 @@ class TestAudioBuffer:
         chunk = buffer.extract_chunk(chunk_size=500, overlap_size=100)
         assert chunk is not None
         assert len(chunk) == 500
-        assert buffer.get_length() == 600
+        assert buffer.get_buffer_size() == 600
     
     def test_extract_chunk_insufficient_data(self):
         buffer = AudioBuffer(sample_rate=16000)
@@ -31,7 +31,7 @@ class TestAudioBuffer:
         
         chunk = buffer.extract_chunk(chunk_size=500, overlap_size=100)
         assert chunk is None
-        assert buffer.get_length() == 100
+        assert buffer.get_buffer_size() == 100
     
     def test_clear_buffer(self):
         buffer = AudioBuffer(sample_rate=16000)
@@ -39,7 +39,7 @@ class TestAudioBuffer:
         buffer.append(data)
         
         buffer.clear()
-        assert buffer.get_length() == 0
+        assert buffer.get_buffer_size() == 0
 
 
 class TestAudioCapture:

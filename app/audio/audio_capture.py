@@ -33,7 +33,7 @@ class AudioBuffer:
         with self._lock:
             self._buffer = np.zeros((0, 1), dtype=self._buffer.dtype)
 
-    def get_length(self) -> int:
+    def get_buffer_size(self) -> int:
         with self._lock:
             return len(self._buffer)
 
@@ -110,7 +110,10 @@ class AudioCapture:
         return self._buffer.extract_chunk(chunk_size, overlap_size)
 
     def has_data(self, minimum_samples: int) -> bool:
-        return self._buffer.get_length() >= minimum_samples
+        return self._buffer.get_buffer_size() >= minimum_samples
+    
+    def get_buffer_size(self) -> int:
+        return self._buffer.get_buffer_size()
 
     def release(self) -> None:
         logger.info("Releasing audio capture resources")

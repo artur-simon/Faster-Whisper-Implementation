@@ -19,9 +19,8 @@ logger = logging.getLogger("app.transcription.orchestrator")
 
 @dataclass
 class TranscriptionState:
-    chunk_offset: float
+    timestamp_offset: float
     previous_overlap_words: List[Word]
-    pending_words: List[Word]
     should_break_line: bool
 
 
@@ -38,9 +37,8 @@ class TranscriptionOrchestrator:
         self._overlap_samples = int(config.overlap_duration * config.sample_rate)
         
         self._state = TranscriptionState(
-            chunk_offset=0.0,
+            timestamp_offset=0.0,
             previous_overlap_words=[],
-            pending_words=[],
             should_break_line=False
         )
         
@@ -65,9 +63,9 @@ class TranscriptionOrchestrator:
         logger.info("Stopping transcription orchestrator")
         self._running = False
         self._audio_capture.stop()
-        if self._state.pending_words:
-            logger.debug(f"Writing {len(self._state.pending_words)} pending words before stopping")
-            self._writer.write_words(self._state.pending_words)
+        if self._state.previous_overlap_words:
+            logger.debug(f"Writing {len(self._state.previous_overlap_words)} pending words before stopping")
+            self._writer.write_words(self._state.previous_overlap_words)
         if self._thread:
             self._thread.join(timeout=5.0)
         logger.info("Transcription orchestrator stopped")
@@ -86,10 +84,10 @@ class TranscriptionOrchestrator:
             return
         
         logger.debug(f"Processing audio chunk: {len(chunk)} samples")
-        np_audio = self._audio_capture.resample_chunk_to_16k(chunk, self._config.sample_rate)
         
         try:
-            segments = self._engine.transcribe_audio(np_audio, self._state.pending_words)
+            np_audio = self._audio_capture.resample_chunk_to_16k(chunk, self._config.sample_rate)
+            segments = self._engine.transcribe_audio(np_audio)
             self._handle_transcription_result(segments)
         except Exception as e:
             logger.error(f"Error processing chunk: {e}", exc_info=True)
@@ -101,12 +99,10 @@ class TranscriptionOrchestrator:
         has_speech = len(current_words) > 0
         
         if current_words:
-            current_words = adjust_word_timestamps(current_words, self._state.chunk_offset)
+            current_words = adjust_word_timestamps(current_words, self._state.timestamp_offset)
         
         resolved_words = resolve_overlapping_words(
-            self._state.previous_overlap_words,
-            current_words
-        )
+            self._state.previous_overlap_words, current_words)
         
         if(resolved_words):
             logger.debug(f"[current_words]: {' '.join(word.text for word in current_words)}")
@@ -114,20 +110,18 @@ class TranscriptionOrchestrator:
             logger.debug(f"[previous]: {' '.join(word.text for word in self._state.previous_overlap_words)}")
             logger.debug(f"[resolved_words]: {' '.join(word.text for word in resolved_words)}")
             
-        next_offset = self._config.chunk_duration + self._state.chunk_offset - self._config.overlap_duration
+        next_offset = self._state.timestamp_offset + (self._config.chunk_duration - self._config.overlap_duration)
         
         if has_speech:
-            words_to_write = get_words_before_time(current_words, next_offset)
+            words_to_write = get_words_before_time(resolved_words, next_offset)
             self._state.previous_overlap_words = get_words_after_time(current_words, next_offset)
-            self._state.pending_words = self._state.previous_overlap_words
             
             if words_to_write:
                 logger.debug(f"Writing {len(words_to_write)} words to file")
                 self._writer.write_words(words_to_write)
                 self._state.should_break_line = True
             
-            next_offset = self._config.chunk_duration + self._state.chunk_offset - self._config.overlap_duration
-            self._state.chunk_offset = next_offset
+            self._state.timestamp_offset = next_offset
         else:
             if resolved_words:
                 logger.debug(f"No speech detected, writing {len(resolved_words)} resolved words")
@@ -138,9 +132,8 @@ class TranscriptionOrchestrator:
                 self._writer.write_string("\n")
                 self._state.should_break_line = False
             
-            self._state.pending_words = []
             self._state.previous_overlap_words = []
-            self._state.chunk_offset = 0.0
+            self._state.timestamp_offset = 0.0
     
     
     def _extract_words_from_segments(self, segments) -> List[Word]:

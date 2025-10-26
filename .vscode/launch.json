@@ -12,6 +12,16 @@
             "console": "integratedTerminal",
             "python": "python",
             "justMyCode": false
+        },
+        {
+            "name": "Python Debugger: run_manual_test.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/simulation/run_manual_test.py",
+            "args": ["${workspaceFolder}/tests/fixtures/sem-título3.wav", "${workspaceFolder}/tests/simulation/report.json"],
+            "console": "integratedTerminal",
+            "python": "python",
+            "justMyCode": false
         }
     ]
 }

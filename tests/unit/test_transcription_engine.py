@@ -54,7 +54,7 @@ class TestTranscriptionEngine:
         assert len(segments[0].words) == 1
         assert segments[0].words[0].text == " test"
         assert segments[0].words[0].probability == 0.95
-        assert segments[0].no_speech_probability == 0.1
+        assert segments[0].no_speech_prob == 0.1
     
     def test_transcribe_file_with_context(self, config, mock_whisper_model):
         mock_model_instance = Mock()

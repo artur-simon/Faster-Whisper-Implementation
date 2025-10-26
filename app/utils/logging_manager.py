@@ -46,9 +46,9 @@ class LoggingManager:
         app_logger.setLevel(logging.DEBUG)
         app_logger.addHandler(self.queue_handler)
         
-        # faster_whisper_logger = logging.getLogger("faster_whisper")
-        # faster_whisper_logger.setLevel(logging.DEBUG)
-        # faster_whisper_logger.addHandler(self.queue_handler)
+        faster_whisper_logger = logging.getLogger("faster_whisper")
+        faster_whisper_logger.setLevel(logging.DEBUG)
+        faster_whisper_logger.addHandler(self.queue_handler)
     
     def set_log_level(self, level: int):
         logging.getLogger("app").setLevel(level)

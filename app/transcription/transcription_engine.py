@@ -1,3 +1,4 @@
+import gc
 from faster_whisper import WhisperModel
 from typing import Iterator, List, Optional
 from app.models import Word, TranscriptionSegment, TranscriptionConfig
@@ -27,13 +28,13 @@ class TranscriptionEngine:
         transcribe_kwargs = {
             'vad_filter': self._config.vad_filter,
             'language': self._config.language if self._config.language != "auto" else None,
-            'word_timestamps': self._config.word_timestamps,
+            'word_timestamps': True #Don't need this if transcribing files
         }
         
         if context_words:
             initial_prompt = "".join([w.text for w in context_words]).strip()
             if initial_prompt:
-                logger.debug(f"Using context prompt: '{initial_prompt[:50]}...'")
+                logger.debug(f"Using context prompt: '{initial_prompt[:50]}'")
                 transcribe_kwargs['initial_prompt'] = initial_prompt
                 transcribe_kwargs['condition_on_previous_text'] = True
         

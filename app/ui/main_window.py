@@ -7,10 +7,11 @@ import pystray
 import threading
 import logging
 
+from app.models import TranscriptionConfig
 from app.transcription.transcription_controller import TranscriptionController
 from app.ui.live_text_view import LiveTextViewer
 from app.ui.logging_window import LoggingWindow
-from app.audio.audio_capture import AudioCapture
+from app.ui.config_window import ConfigWindow
 from app.utils.config_manager import ConfigManager
 from app.utils.logging_manager import LoggingManager
 
@@ -25,18 +26,15 @@ class MainWindow:
         self.root.protocol("WM_DELETE_WINDOW", self.exit_app)
         
         logger.info("Initializing WispLive main window")
+        
         self.config_manager = ConfigManager()
-        config = self.config_manager.load_config()
+        self.config_manager.load_config_from_file()
+        config = self.config_manager.get_config_dict()
         logger.debug(f"Loaded configuration: {config}")
         
         self.configure_menu_bar(root, config)
         
-        configs_frame = tk.Frame(root)
-        configs_frame.pack(pady=5, padx=5, fill='x')
-        self.configure_model_toolbar(configs_frame, config)
-        self.configure_input_toolbar(configs_frame, config)
-        
-        self.configure_status_toolbar(root, config)
+        self.configure_toolbar(root, config)
         
         self.text_viewer = LiveTextViewer(root, "transcription.txt")
         
@@ -46,6 +44,7 @@ class MainWindow:
         
         self.logging_manager = LoggingManager.get_instance()
         self.logging_window = None
+        self.config_window = None
     
     
     def configure_menu_bar(self, root, config):
@@ -54,7 +53,7 @@ class MainWindow:
         
         # ===== File Menu =====
         file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Open Audio File", command=lambda: filedialog.askopenfilename(), state=tk.DISABLED)
+        file_menu.add_command(label="Transcribe Audio File", command=self.select_audio_file, state=tk.DISABLED)
         file_menu.add_command(label="Open Recent", command=lambda: print("Open recent files"), state=tk.DISABLED)
         file_menu.add_command(label="Batch Process Folder", command=lambda: filedialog.askdirectory(), state=tk.DISABLED)
         file_menu.add_command(label="Import Session", command=lambda: filedialog.askopenfilename(), state=tk.DISABLED)
@@ -69,6 +68,7 @@ class MainWindow:
 
         # ===== Edit Menu =====
         edit_menu = tk.Menu(menubar, tearoff=0)
+        edit_menu.add_command(label="Copy Text", command=self.copy_text)
         edit_menu.add_command(label="Find / Replace", command=lambda: print("Find Replace"), state=tk.DISABLED)
         edit_menu.add_command(label="Clear Transcript", command=lambda: print("Clear Transcript"), state=tk.DISABLED)
         edit_menu.add_command(label="Undo", command=lambda: print("Undo"), state=tk.DISABLED)
@@ -81,20 +81,17 @@ class MainWindow:
 
         # ===== View Menu =====
         view_menu = tk.Menu(menubar, tearoff=0)
+        view_menu.add_command(label="Show Logging Console", command=self.show_logging_window)
         view_menu.add_command(label="Hide to System tray", command=self.hide_window)
+        view_menu.add_command(label="Toggle Dark Mode", state=tk.DISABLED)
         view_menu.add_command(label="Toggle Waveform", command=lambda: print("Waveform toggle"), state=tk.DISABLED)
         view_menu.add_command(label="Show/Hide Timestamps", command=lambda: print("Timestamps toggle"), state=tk.DISABLED)
         view_menu.add_command(label="Word Confidence Heatmap", command=lambda: print("Confidence heatmap"), state=tk.DISABLED)
         view_menu.add_command(label="Real-Time Highlighting", command=lambda: print("Highlighting"), state=tk.DISABLED)
-        view_menu.add_command(label="Toggle Dark Mode", state=tk.DISABLED)
         menubar.add_cascade(label="View", menu=view_menu)
 
         # ===== Tools Menu =====
         tools_menu = tk.Menu(menubar, tearoff=0)
-        self.vad_filter_var = tk.BooleanVar(value=config.get('vad_filter', False))
-        tools_menu.add_checkbutton(label="Use VAD filter", 
-                                   command=lambda: self.on_config_value_change(vad_filter=self.vad_filter_var.get()), 
-                                   variable=self.vad_filter_var)
         tools_menu.add_command(label="Language Auto-Detect", command=lambda: print("Auto-detect language"), state=tk.DISABLED)
         tools_menu.add_command(label="Speaker Diarization", command=lambda: print("Speaker diarization"), state=tk.DISABLED)
         tools_menu.add_command(label="Toggle Punctuation Restoration", command=lambda: print("Punctuation restoration"), state=tk.DISABLED)
@@ -109,21 +106,16 @@ class MainWindow:
         settings_menu.add_command(label="Load Preset", command=lambda: print("Load preset"), state=tk.DISABLED)
         settings_menu.add_command(label="Audio Input Routing", command=lambda: print("Audio routing"), state=tk.DISABLED)
         settings_menu.add_command(label="Hotkeys", command=lambda: print("Hotkeys"), state=tk.DISABLED)
-        
-        logging_menu = tk.Menu(settings_menu, tearoff=0)
-        logging_menu.add_command(label="Show Logging Console", command=self.show_logging_window)
-        logging_menu.add_separator()
-        logging_menu.add_command(label="Set Level: DEBUG", command=lambda: self.set_log_level("DEBUG"))
-        logging_menu.add_command(label="Set Level: INFO", command=lambda: self.set_log_level("INFO"))
-        logging_menu.add_command(label="Set Level: WARNING", command=lambda: self.set_log_level("WARNING"))
-        logging_menu.add_command(label="Set Level: ERROR", command=lambda: self.set_log_level("ERROR"))
-        settings_menu.add_cascade(label="Logging Verbosity", menu=logging_menu)
-        
         menubar.add_cascade(label="Settings", menu=settings_menu)
 
         # ===== Help Menu =====
         help_menu = tk.Menu(menubar, tearoff=0)
-        help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About", "WispLive Voice Transcriber"))
+        help_menu.add_command(label="About",command=lambda: messagebox.showinfo("About", (
+            "WispLive Voice Transcriber\n"
+            "Version 0.2.0\n"
+            "Developed by Artur Simon\n"
+            "For support or updates, visit: https://artursimon.dev/wisplive"
+            )))
         help_menu.add_command(label="Model Info", command=lambda: print("Model info"), state=tk.DISABLED)
         help_menu.add_command(label="Benchmark Test", command=lambda: print("Benchmark"), state=tk.DISABLED)
         help_menu.add_command(label="Open Logs Folder", command=lambda: print("Logs folder"), state=tk.DISABLED)
@@ -132,100 +124,47 @@ class MainWindow:
         root.config(menu=menubar)
         
     
-    def configure_model_toolbar(self, root, config):
-        model_frame = tk.Frame(root)
+    def configure_toolbar(self, root, config):
+        
+        toolbar_frame = tk.Frame(root)
+        toolbar_frame.pack(pady=5, padx=5, fill='x')
+        
+        model_frame = tk.Frame(toolbar_frame)
         model_frame.pack(side="left", anchor="w", fill='x')
+        self._model_frame = model_frame
+        
+        column = 0
         
         self.toggle_model_button = tk.Button(model_frame, text="Activate Model", command=self.toggle_model)
-        self.toggle_model_button.grid(row=0, column=0)
+        self.toggle_model_button.grid(row=0, column=column, padx=(0, 5))
+        column += 1
         
-        self.model_size = tk.StringVar(value=config.get("model_size", "medium"))
-        tk.OptionMenu(model_frame, self.model_size, "tiny", "base", "small", "medium", "large-v3", "turbo").grid(row=0, column=1)
+        self.start_button = tk.Button(model_frame, text="Start Recording", command=self.toggle_recording, state=tk.DISABLED)
+        self.start_button.grid(row=0, column=column, padx=(0, 5))
+        column += 1
         
-        self.device_var = tk.StringVar(value=config.get("device", "cuda"))
-        tk.OptionMenu(model_frame, self.device_var, "cpu", "cuda").grid(row=0, column=2)
-
-        self.compute_type_var = tk.StringVar(value=config.get("compute_type", "int8"))
-        tk.OptionMenu(model_frame, self.compute_type_var, "float32", "float16", "int8_float16", "int8").grid(row=0, column=3)
-
-        self._model_frame = model_frame
-    
-    
-    def configure_input_toolbar(self, root, config):
-        config_frame = tk.Frame(root)
-        config_frame.pack(side="right", anchor='e')
-        
-        self.language_var = tk.StringVar(value=config.get("language", "en"))
-        self.language_var.trace_add("write", lambda *args:self.on_config_value_change(language=self.language_var.get()))
-        tk.OptionMenu(config_frame, self.language_var, "pt", "en").grid(row=0, column=3)
-        
-        self.input_devices = AudioCapture.get_input_devices()
-        self.device_index_map = {f"{d['index']}: {d['name']}": d['index'] for d in self.input_devices}
-        
-        mic_names = list(self.device_index_map.keys())
-        selected_mic = "No devices"
-        
-        if mic_names:
-            default_id = AudioCapture.get_default_input_device_id()
-            selected_mic = next(
-                (f"{d['index']}: {d['name']}" for d in self.input_devices if d["index"] == default_id),
-                None
-            )
-                
-        saved_mic_idx = config.get("mic_id")
-        selected_mic = next(
-            (name for name, idx in self.device_index_map.items() if idx == saved_mic_idx),
-            selected_mic
-        )
-        
-        self.microphone_var = tk.StringVar(value=selected_mic)
-        self.microphone_var.trace_add(
-            "write",
-            lambda *args: self.on_config_value_change(
-                mic_id=self.device_index_map.get(self.microphone_var.get())
-            )
-        )
-        
-        mic_menu = (
-            tk.OptionMenu(config_frame, self.microphone_var, *mic_names) 
-            if mic_names 
-            else tk.OptionMenu(config_frame, self.microphone_var, "No devices")
-        )
-        
-        mic_menu.grid(row=0, column=4)
-    
-    
-    def configure_status_toolbar(self, root, config):
-        button_frame = tk.Frame(root)
-        button_frame.pack(pady=5, padx=5, fill='x')
-        
-        record_frame = tk.Frame(button_frame)
-        record_frame.pack(side="left", anchor="w")
-        self.start_button = tk.Button(record_frame, text="Start Recording", command=self.toggle_recording, state=tk.DISABLED)
-        self.start_button.grid(row=0, column=0)
-        
-        self.copy_button = tk.Button(record_frame, text="Copy Text", command=self.copy_text)
-        self.copy_button.grid(row=0, column=2)
-
-        self.select_file_button = tk.Button(record_frame, text="Select audio file", command=self.select_audio_file)
-        self.select_file_button.grid(row=0, column=3)
+        self.configuration_button = tk.Button(model_frame, text="Configuration", command=self.open_config_window)
+        self.configuration_button.grid(row=0, column=column, padx=(0, 5))
+        column += 1
         
         self.should_paste_content_var = tk.BooleanVar(value=config.get("should_paste_content", "False"))
         self.should_paste_content_checkbutton = tk.Checkbutton(
-            record_frame, 
+            model_frame, 
             text='Paste transcription', 
             variable=self.should_paste_content_var,
             onvalue=1,
             offvalue=0,
             command=lambda:self.on_config_value_change(should_paste_content=self.should_paste_content_var.get())
         )
-        self.should_paste_content_checkbutton.grid(row=0, column=4)
+        self.should_paste_content_checkbutton.grid(row=0, column=column)
+        column += 1
         
-        status_frame = tk.Frame(button_frame)
-        status_frame.pack(side="right", anchor="e")
+        status_frame = tk.Frame(toolbar_frame)
+        status_frame.pack(side="right", anchor="e", fill='x')
+        
         self.status_label = tk.Label(status_frame, text="Status: Stopped")
-        self.status_label.grid(row=0, column=0)
-                
+        self.status_label.grid(row=0, column=5)
+    
     
     def on_config_value_change(self, **kwargs):
         if(self.transcriber):
@@ -244,23 +183,13 @@ class MainWindow:
     def toggle_model(self):
         if self.transcriber is None:            
             try:
-                logger.info(f"Activating model: {self.model_size.get()} on {self.device_var.get()}")
-                self.transcriber = TranscriptionController(
-                    device = self.device_var.get(),
-                    compute_type = self.compute_type_var.get(),
-                    model_size = self.model_size.get(),
-                    language = self.language_var.get(),
-                    mic_id = self.device_index_map.get(self.microphone_var.get()),
-                    should_paste_content = self.should_paste_content_var.get()
-                )
-                
+                config_dict = self.config_manager.get_config_dict()
+                config = TranscriptionConfig(**config_dict)
+                logger.info(f"Activating model: {config.model_size} on {config.device}")
+                self.transcriber = TranscriptionController(config)
                 logger.info("Model activated successfully")
                 self.toggle_model_button.config(text="Release Model")
                 self.start_button.config(state=tk.NORMAL)
-                self.select_file_button.config(state=tk.NORMAL)
-                for child in self._model_frame.winfo_children():
-                    if isinstance(child, tk.OptionMenu):
-                        child.config(state=tk.DISABLED)
             except Exception as e:
                 logger.error(f"Failed to initialize model: {e}", exc_info=True)
                 messagebox.showerror("Error", f"Failed to initialize model, refer to logs for more details.")
@@ -273,9 +202,8 @@ class MainWindow:
             self.toggle_model_button.config(text="Activate Model")
             self.start_button.config(state=tk.DISABLED)
             self.select_file_button.config(state=tk.DISABLED)
-            for child in self._model_frame.winfo_children():
-                if isinstance(child, tk.OptionMenu):
-                    child.config(state=tk.NORMAL)
+        
+        if self.config_window is not None: self.config_window.toggle_widgets(self.transcriber is not None)
 
 
     def toggle_recording(self):
@@ -312,18 +240,14 @@ class MainWindow:
 
 
     def save_config(self):
+        current_config = self.config_manager.get_config_dict()
         config = {
-            "model_size": self.model_size.get(),
-            "device": self.device_var.get(),
-            "compute_type": self.compute_type_var.get(),
-            "language": self.language_var.get(),
-            "mic_id": self.device_index_map.get(self.microphone_var.get()),
+            **current_config,
             "should_paste_content": self.should_paste_content_var.get(),
-            "vad_filter": self.vad_filter_var.get(),
         }
         try:
             logger.info("Saving configuration")
-            self.config_manager.save_config(config)
+            self.config_manager.save_config_to_file(config)
             logger.info("Configuration saved successfully")
             messagebox.showinfo("Sucess", "Configuration saved!")
         except Exception as e:
@@ -367,11 +291,16 @@ class MainWindow:
         self.logging_window.show()
     
     
-    def set_log_level(self, level_name: str):
-        import logging
-        level = getattr(logging, level_name)
-        self.logging_manager.set_log_level(level)
+    def open_config_window(self):
+        config = self.config_manager.get_config_dict()
+        is_running = self.transcriber is not None
+        self.config_window = ConfigWindow(self, self.config_manager, config, is_running)
     
+    
+    def on_config_window_apply(self, config):
+        if self.transcriber:
+            self.transcriber.update_input_config(**config)
+            
     
     def exit_app(self):
         logger.info("Shutting down application")

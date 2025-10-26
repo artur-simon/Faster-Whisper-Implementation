@@ -1,6 +1,8 @@
+import logging
 from typing import List, Set, Optional
 from app.models import Word
 
+logger = logging.getLogger("app.transcription.overlap_resolver")
 
 def resolve_overlapping_words(
     previous_words: List[Word],
@@ -66,7 +68,12 @@ def calculate_overlap_ratio(word1: Word, word2: Word) -> float:
 
 
 def select_better_word(word1: Word, word2: Word) -> Word:
-    return word1 if word1.probability > word2.probability else word2
+    if word1.probability > word2.probability:
+        logger.debug(f"Keeping last: {word1.text} - {word1.probability}")
+        return word1
+    else:
+        logger.debug(f"Keeping new: {word2.text} - {word2.probability}")
+        return word2
 
 
 def is_in_overlap_region(word: Word, overlap_words: List[Word]) -> bool:
@@ -86,8 +93,8 @@ def adjust_word_timestamps(words: List[Word], offset: float) -> List[Word]:
 
 
 def get_words_after_time(words: List[Word], start_time: float) -> List[Word]:
-    return [w for w in words if w.start >= start_time]
+    return [w for w in words if w.end >= start_time]
 
 
 def get_words_before_time(words: List[Word], end_time: float) -> List[Word]:
-    return [w for w in words if w.start < end_time]
+    return [w for w in words if w.end < end_time]
