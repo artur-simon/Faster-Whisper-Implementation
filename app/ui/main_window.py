@@ -21,7 +21,7 @@ logger = logging.getLogger("app.ui.main_window")
 class MainWindow:
     def __init__(self, root):
         self.root = root
-        self.root.title("WispLive")
+        self.root.title("WispLive!")
         self.root.iconbitmap(default=self.get_icon_path())
         self.root.protocol("WM_DELETE_WINDOW", self.exit_app)
         
@@ -31,21 +31,18 @@ class MainWindow:
         self.config_manager.load_config_from_file()
         config = self.config_manager.get_config_dict()
         logger.debug(f"Loaded configuration: {config}")
-        
         self.configure_menu_bar(root, config)
-        
         self.configure_toolbar(root, config)
-        
         self.text_viewer = LiveTextViewer(root, "transcription.txt")
+        self.configure_status_bar(root, config)
         
-        self.transcriber = None
         self.is_running = False
+        self.transcriber = None
         self.tray_icon = None
-        
         self.logging_manager = LoggingManager.get_instance()
         self.logging_window = None
         self.config_window = None
-    
+        
     
     def configure_menu_bar(self, root, config):
         
@@ -65,6 +62,7 @@ class MainWindow:
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.exit_app)
         menubar.add_cascade(label="File", menu=file_menu)
+        self.file_menu = file_menu
 
         # ===== Edit Menu =====
         edit_menu = tk.Menu(menubar, tearoff=0)
@@ -104,7 +102,6 @@ class MainWindow:
         settings_menu.add_command(label="Model Parameters", command=lambda: print("Model params"), state=tk.DISABLED)
         settings_menu.add_command(label="Save Preset", command=self.save_config)
         settings_menu.add_command(label="Load Preset", command=lambda: print("Load preset"), state=tk.DISABLED)
-        settings_menu.add_command(label="Audio Input Routing", command=lambda: print("Audio routing"), state=tk.DISABLED)
         settings_menu.add_command(label="Hotkeys", command=lambda: print("Hotkeys"), state=tk.DISABLED)
         menubar.add_cascade(label="Settings", menu=settings_menu)
 
@@ -150,7 +147,7 @@ class MainWindow:
         self.should_paste_content_var = tk.BooleanVar(value=config.get("should_paste_content", "False"))
         self.should_paste_content_checkbutton = tk.Checkbutton(
             model_frame, 
-            text='Paste transcription', 
+            text='Auto paste', 
             variable=self.should_paste_content_var,
             onvalue=1,
             offvalue=0,
@@ -158,12 +155,25 @@ class MainWindow:
         )
         self.should_paste_content_checkbutton.grid(row=0, column=column)
         column += 1
+    
+    
+    def configure_status_bar(self, root, config):
+        statusbar = tk.Frame(root, bd=1, relief=tk.SUNKEN, padx=0, pady=0)
+        statusbar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        self.status_label = tk.Label(statusbar, text="Stopped", anchor=tk.W)
+        self.status_label.pack(side=tk.LEFT)
+        sep1 = tk.Label(statusbar, text=" | ", anchor=tk.W)
+        sep1.pack(side=tk.LEFT)
         
-        status_frame = tk.Frame(toolbar_frame)
-        status_frame.pack(side="right", anchor="e", fill='x')
+        config_string = f'Mic input: {config['mic_id']} | Language: {config['language']}'
+        self.config_label = tk.Label(statusbar, text=config_string)
+        self.config_label.pack(side=tk.LEFT)
         
-        self.status_label = tk.Label(status_frame, text="Status: Stopped")
-        self.status_label.grid(row=0, column=5)
+        version = tk.Label(statusbar, text="v0.2.0", anchor=tk.E)
+        version.pack(side=tk.RIGHT)
+        sep2 = tk.Label(statusbar, text=" | ")
+        sep2.pack(side=tk.RIGHT)
     
     
     def on_config_value_change(self, **kwargs):
@@ -181,7 +191,8 @@ class MainWindow:
     
         
     def toggle_model(self):
-        if self.transcriber is None:            
+        model_is_none = self.transcriber is None
+        if model_is_none:            
             try:
                 config_dict = self.config_manager.get_config_dict()
                 config = TranscriptionConfig(**config_dict)
@@ -190,6 +201,7 @@ class MainWindow:
                 logger.info("Model activated successfully")
                 self.toggle_model_button.config(text="Release Model")
                 self.start_button.config(state=tk.NORMAL)
+                self.file_menu.entryconfig("Transcribe Audio File", state=tk.NORMAL)
             except Exception as e:
                 logger.error(f"Failed to initialize model: {e}", exc_info=True)
                 messagebox.showerror("Error", f"Failed to initialize model, refer to logs for more details.")
@@ -201,9 +213,9 @@ class MainWindow:
             logger.info("Model released")
             self.toggle_model_button.config(text="Activate Model")
             self.start_button.config(state=tk.DISABLED)
-            self.select_file_button.config(state=tk.DISABLED)
+            self.file_menu.entryconfig("Transcribe Audio File", state=tk.DISABLED)
         
-        if self.config_window is not None: self.config_window.toggle_widgets(self.transcriber is not None)
+        if self.config_window is not None: self.config_window.toggle_widgets(model_is_none)
 
 
     def toggle_recording(self):
@@ -211,13 +223,13 @@ class MainWindow:
             logger.info("Starting recording")
             self.is_running = True
             self.transcriber.run(output_file="transcription.txt")
-            self.status_label.config(text="Status: Recording...")
+            self.status_label.config(text="Recording")
             self.start_button.config(text="Stop Recording")
         elif self.transcriber:
             logger.info("Stopping recording")
             self.is_running = False
             self.transcriber.stop()
-            self.status_label.config(text="Status: Stopped")
+            self.status_label.config(text="Stopped")
             self.start_button.config(text="Start Recording")
 
         
@@ -226,12 +238,12 @@ class MainWindow:
         filepath = filedialog.askopenfilename(title="Selecione um arquivo de áudio", filetypes=filetypes)
         if filepath and self.transcriber:
             logger.info(f"Selected audio file for transcription: {filepath}")
-            self.status_label.config(text="Status: Transcribing file...")
+            self.status_label.config(text="Transcribing file")
             def transcribe_file():
                 try:
                     self.transcriber.transcribe_audio_file(filepath, "transcription.txt")
                     logger.info(f"File transcription completed: {filepath}")
-                    self.root.after(0, lambda: self.status_label.config(text="Status: Transcrição concluída"))
+                    self.root.after(0, lambda: self.status_label.config(text="Transcription completed"))
                 except Exception as e:
                     logger.error(f"File transcription failed: {e}", exc_info=True)
                     messagebox.showerror("Error", f"File transcription failed, refer to logs for more details.")
@@ -298,8 +310,10 @@ class MainWindow:
     
     
     def on_config_window_apply(self, config):
-        if self.transcriber:
-            self.transcriber.update_input_config(**config)
+        self.on_config_value_change(**config)
+        
+        config_string = f'Mic input: {config['mic_id']} | Language: {config['language']}'
+        self.config_label.config(text= config_string)
             
     
     def exit_app(self):
