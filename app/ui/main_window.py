@@ -1,3 +1,4 @@
+import os
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageDraw
 import tkinter as tk
@@ -11,6 +12,7 @@ from app.transcription.transcription_controller import TranscriptionController
 from app.ui.live_text_view import LiveTextViewer
 from app.ui.logging_window import LoggingWindow
 from app.ui.config_window import ConfigWindow
+from app.utils.app_state_manager import AppStateManager
 from app.utils.config_manager import ConfigManager
 from app.utils.logging_manager import LoggingManager
 
@@ -19,23 +21,36 @@ logger = logging.getLogger("app.ui.main_window")
 
 class MainWindow:
     def __init__(self, root):
+        logger.info("Initializing WispLive main window")
         self.root = root
         self.root.title("WispLive!")
         self.root.iconbitmap(default=self.get_icon_path())
         self.root.protocol("WM_DELETE_WINDOW", self.exit_app)
         
-        logger.info("Initializing WispLive main window")
-        
+        # Load user settings (transcription config)
         self.config_manager = ConfigManager()
         self.config_manager.load_config_from_file()
         config = self.config_manager.get_config_dict()
         logger.debug(f"Loaded configuration: {config}")
+        
+        # Load application state (current file, recent files, etc)
+        self.state_manager = AppStateManager()
+        self.state_manager.load_state()
+        
+        # Restore window geometry if saved
+        saved_geometry = self.state_manager.get_window_geometry()
+        if saved_geometry:
+            self.root.geometry(saved_geometry)
+        
         self.configure_menu_bar(root, config)
         self.configure_toolbar(root, config)
-        self.text_viewer = LiveTextViewer(root, "transcription.txt")
-        self.configure_status_bar(root, config)
         
+        current_file = self.state_manager.get_current_transcription_file()
+        self.text_viewer = LiveTextViewer(root, current_file)
+        
+        self.configure_status_bar(root, config)
         self.setup_tray_icon()
+        
         
         self.is_running = False
         self.transcriber = None
@@ -50,10 +65,14 @@ class MainWindow:
         
         # ===== File Menu =====
         file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="New Transcription", command=self.new_transcription_file)
+        file_menu.add_command(label="Open Transcription", command=self.open_transcription_file)
+        self.recent_menu = tk.Menu(file_menu, tearoff=0)
+        self.update_recent_files_menu()
+        file_menu.add_cascade(label="Open Recent", menu=self.recent_menu)
+        file_menu.add_separator()
         file_menu.add_command(label="Transcribe Audio File", command=self.select_audio_file, state=tk.DISABLED)
-        file_menu.add_command(label="Open Recent", command=lambda: print("Open recent files"), state=tk.DISABLED)
         file_menu.add_command(label="Batch Process Folder", command=lambda: filedialog.askdirectory(), state=tk.DISABLED)
-        file_menu.add_command(label="Import Session", command=lambda: filedialog.askopenfilename(), state=tk.DISABLED)
         file_menu.add_separator()
         file_menu.add_command(label="Export as TXT", command=lambda: print("Export TXT"), state=tk.DISABLED)
         file_menu.add_command(label="Export as SRT", command=lambda: print("Export SRT"), state=tk.DISABLED)
@@ -118,8 +137,8 @@ class MainWindow:
         menubar.add_cascade(label="Help", menu=help_menu)
         
         root.config(menu=menubar)
-        
-    
+
+
     def configure_toolbar(self, root, config):
         
         toolbar_frame = tk.Frame(root)
@@ -154,8 +173,8 @@ class MainWindow:
         )
         self.should_paste_content_checkbutton.grid(row=0, column=column)
         column += 1
-    
-    
+
+
     def configure_status_bar(self, root, config):
         statusbar = tk.Frame(root, bd=1, relief=tk.SUNKEN, padx=0, pady=0)
         statusbar.pack(side=tk.BOTTOM, fill=tk.X)
@@ -182,8 +201,8 @@ class MainWindow:
             else os.path.dirname(os.path.abspath(sys.argv[0]))
         )
         return os.path.join(base_path, "wisp.ico")
-    
-        
+
+
     def toggle_model(self):
         if self.transcriber is None:            
             try:
@@ -220,7 +239,8 @@ class MainWindow:
         if not self.is_running:
             logger.info("Starting recording")
             self.is_running = True
-            self.transcriber.run(output_file="transcription.txt")
+            transcription_file = self.state_manager.get_current_transcription_file()
+            self.transcriber.run(output_file=transcription_file)
             
             self.status_label.config(text="Recording")
             self.start_button.config(text="Stop Recording")
@@ -235,7 +255,7 @@ class MainWindow:
             self.start_button.config(text="Start Recording")
             self.tray_icon.icon = self.get_tray_icon("READY")
 
-        
+
     def select_audio_file(self):
         filetypes = (("MP3 files","*.mp3"), ("WAV files", "*.wav"), ("All files", "*.*"))
         filepath = filedialog.askopenfilename(title="Select an audio file", filetypes=filetypes)
@@ -244,7 +264,8 @@ class MainWindow:
             self.status_label.config(text="Transcribing file")
             def transcribe_file():
                 try:
-                    self.transcriber.transcribe_audio_file(filepath, "transcription.txt")
+                    transcription_file = self.state_manager.get_current_transcription_file()
+                    self.transcriber.transcribe_audio_file(filepath, transcription_file)
                     logger.info(f"File transcription completed: {filepath}")
                     self.root.after(0, lambda: self.status_label.config(text="Transcription completed"))
                 except Exception as e:
@@ -289,6 +310,10 @@ class MainWindow:
         self.root.withdraw()
 
 
+    def show_window(self, icon=None, item=None):
+        self.root.deiconify()
+
+
     def setup_tray_icon(self):
         image = self.get_tray_icon("OFF")
         
@@ -298,8 +323,8 @@ class MainWindow:
         ))
 
         threading.Thread(target=self.tray_icon.run, name="Main - Tray Icon" , daemon=True).start()
-        
-        
+
+
     def get_tray_icon(self, state):
         image = Image.new('RGBA', (64, 64), color=(0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
@@ -314,34 +339,92 @@ class MainWindow:
         return image
 
 
-    def show_window(self, icon=None, item=None):
-        self.root.deiconify()
-    
-    
     def show_logging_window(self):
         if self.logging_window is None:
             self.logging_window = LoggingWindow(self.root, self.logging_manager.log_queue)
         self.logging_window.show()
-    
-    
+
+
     def open_config_window(self):
         config = self.config_manager.get_config_dict()
         is_running = self.transcriber is not None
         self.config_window = ConfigWindow(self, self.config_manager, config, is_running)
-    
-    
+
+
     def on_config_change(self, config):
         self.update_transcriber_configs(**config)
-        
         config_string = f'Mic input: {config['mic_id']} | Language: {config['language']}'
         self.config_label.config(text= config_string)
-                
-    
+
+
     def update_transcriber_configs(self, **kwargs):
         if(self.transcriber):
             self.transcriber.update_input_config(**kwargs)
+
+
+    def update_recent_files_menu(self):
+        self.recent_menu.delete(0, tk.END)
         
-    
+        recent_files = self.state_manager.get_recent_files()
+        
+        if not recent_files:
+            self.recent_menu.add_command(label="(No recent files)", state=tk.DISABLED)
+        else:
+            for file_path in recent_files:
+                file_name = os.path.basename(file_path)
+                self.recent_menu.add_command(
+                    label=file_name,
+                    command=lambda f=file_path: self.open_transcription_file(f)
+                )
+            
+            self.recent_menu.add_separator()
+            self.recent_menu.add_command(
+                label="Clear Recent Files",
+                command=self.clear_recent_files
+            )
+
+
+    def new_transcription_file(self):
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            initialdir=self.state_manager.get_last_save_directory()
+        )
+        
+        if file_path:
+            self.state_manager.set_last_save_directory(os.path.dirname(file_path))
+            self.state_manager.set_current_transcription_file(file_path)
+            
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write("")
+            
+            self.text_viewer.set_file_path(file_path)
+            self.update_recent_files_menu()
+            logger.info(f"New transcription file created: {file_path}")
+
+
+    def open_transcription_file(self, file_path=None):
+        if not file_path:
+            file_path = filedialog.askopenfilename(
+                defaultextension=".txt",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+                initialdir=self.state_manager.get_last_save_directory()
+            )
+        
+        if file_path and os.path.exists(file_path):
+            self.state_manager.set_last_save_directory(os.path.dirname(file_path))
+            self.state_manager.set_current_transcription_file(file_path)
+            
+            self.text_viewer.set_file_path(file_path)
+            self.update_recent_files_menu()
+            logger.info(f"Opened transcription file: {file_path}")
+
+
+    def clear_recent_files(self):
+        self.state_manager.clear_recent_files()
+        self.update_recent_files_menu()
+
+
     def exit_app(self):
         logger.info("Shutting down application")
         if self.tray_icon:
@@ -355,4 +438,3 @@ class MainWindow:
             self.transcriber = None
         logger.info("Application shutdown complete")
         self.root.quit()
-

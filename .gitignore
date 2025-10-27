@@ -7,3 +7,4 @@ dist/*
 *transcription*.txt
 *report*.json
 *config*.json
+app_state.json

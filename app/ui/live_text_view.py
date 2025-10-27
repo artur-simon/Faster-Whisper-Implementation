@@ -9,21 +9,27 @@ class LiveTextViewer:
     def __init__(self, root, path):
         self.root = root
         self.path = path
-        
+
         frame = tk.Frame(root)
-        frame.pack(fill='both', expand=True)
+        frame.pack(fill="both", expand=True)
 
         self.scrollbar = tk.Scrollbar(frame)
-        self.scrollbar.pack(side='right', fill='y')
+        self.scrollbar.pack(side="right", fill="y")
 
-        self.text = tk.Text(frame, wrap='word', yscrollcommand=self.scrollbar.set)
-        self.text.pack(side='left', fill='both', expand=True)
+        self.text = tk.Text(frame, wrap="word", yscrollcommand=self.scrollbar.set)
+        self.text.pack(side="left", fill="both", expand=True)
         self.scrollbar.config(command=self.text.yview)
 
         self.last_size = 0
         self.follow = True
-        self.text.bind('<MouseWheel>', self._on_scroll)
+        self.text.bind("<MouseWheel>", self._on_scroll)
         self.update()
+
+    def set_file_path(self, new_file_path):
+        """Change the file being monitored"""
+        self.path = new_file_path
+        self.text.delete(1.0, tk.END)
+        self.last_read_position = 0
 
     def _on_scroll(self, event):
         last = self.text.index("@0,10000")
@@ -32,7 +38,7 @@ class LiveTextViewer:
 
     def update(self):
         try:
-            if(os.path.exists(self.path)):
+            if os.path.exists(self.path):
                 size = os.path.getsize(self.path)
                 if size < self.last_size:
                     self.text.delete("1.0", tk.END)
