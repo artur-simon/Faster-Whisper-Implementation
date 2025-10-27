@@ -181,7 +181,7 @@ class ConfigWindow:
             current_config.update(config)
             logger.info(f"Applying config: {current_config}")
             
-            self.parent.on_config_window_apply(current_config)
+            self.parent.on_config_change(current_config)
             
             logger.info("Config applied successfully")
         except ValueError as e:
