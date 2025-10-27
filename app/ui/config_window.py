@@ -15,7 +15,7 @@ class ConfigWindow:
         
         self.window = tk.Toplevel(parent.root)
         self.window.title("Configuration")
-        self.window.geometry("400x650")
+        self.window.geometry("400x450")
         self.window.protocol("WM_DELETE_WINDOW", self._close)
         
         self.config_vars = {}
@@ -27,7 +27,7 @@ class ConfigWindow:
         self.toggle_widgets(is_model_running)
         
     def _create_widgets(self):
-        main_frame = tk.Frame(self.window, padx=20, pady=20)
+        main_frame = tk.Frame(self.window, padx=5, pady=5)
         main_frame.pack(fill='both', expand=True)
         
         notebook = ttk.Notebook(main_frame)
@@ -40,7 +40,7 @@ class ConfigWindow:
         notebook.add(audio_frame, text='Audio')
         
         button_frame = tk.Frame(main_frame)
-        button_frame.pack(fill='x', pady=(10, 0))
+        button_frame.pack(fill='x', pady=(5, 0))
         
         tk.Button(button_frame, text="Apply", command=self._apply_config).pack(side='left', padx=5)
         tk.Button(button_frame, text="OK", command=self._ok).pack(side='left', padx=5)

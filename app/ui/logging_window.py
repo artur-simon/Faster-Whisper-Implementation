@@ -41,7 +41,7 @@ class LoggingWindow:
 
     def _create_widgets(self):
         toolbar = tk.Frame(self.window)
-        toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        toolbar.pack(side=tk.TOP, fill=tk.X, padx=5)
 
         tk.Label(toolbar, text="Log Level:").pack(side=tk.LEFT, padx=5)
 
@@ -69,11 +69,11 @@ class LoggingWindow:
         ).pack(side=tk.LEFT, padx=5)
 
         # container for source checkboxes
-        self.filter_frame = tk.Frame(toolbar)
-        self.filter_frame.pack(side=tk.RIGHT, padx=5, pady=3)
+        self.filter_frame = tk.Frame(self.window)
+        self.filter_frame.pack(side=tk.RIGHT)
 
         text_frame = tk.Frame(self.window)
-        text_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=5)
 
         self.text_widget = scrolledtext.ScrolledText(
             text_frame, wrap=tk.WORD, font=("Consolas", 9), state=tk.DISABLED
