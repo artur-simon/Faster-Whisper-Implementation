@@ -215,7 +215,7 @@ class ConfigWindow:
         self.window.deiconify()
         self.window.grab_set()
 
-    def toggle_widgets(self, is_model_running):
-        state = tk.DISABLED if is_model_running else tk.NORMAL
+    def toggle_widgets(self, is_model_loaded):
+        state = tk.DISABLED if is_model_loaded else tk.NORMAL
         for widget in self.disabled_on_model_run:
             widget.config(state=state)

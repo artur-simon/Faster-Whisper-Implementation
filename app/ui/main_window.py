@@ -1,4 +1,3 @@
-from time import sleep
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageDraw
 import tkinter as tk
@@ -36,9 +35,10 @@ class MainWindow:
         self.text_viewer = LiveTextViewer(root, "transcription.txt")
         self.configure_status_bar(root, config)
         
+        self.setup_tray_icon()
+        
         self.is_running = False
         self.transcriber = None
-        self.tray_icon = None
         self.logging_manager = LoggingManager.get_instance()
         self.logging_window = None
         self.config_window = None
@@ -160,7 +160,7 @@ class MainWindow:
         statusbar = tk.Frame(root, bd=1, relief=tk.SUNKEN, padx=0, pady=0)
         statusbar.pack(side=tk.BOTTOM, fill=tk.X)
 
-        self.status_label = tk.Label(statusbar, text="Stopped", anchor=tk.W)
+        self.status_label = tk.Label(statusbar, text="Off", anchor=tk.W)
         self.status_label.pack(side=tk.LEFT)
         sep1 = tk.Label(statusbar, text=" | ", anchor=tk.W)
         sep1.pack(side=tk.LEFT)
@@ -185,14 +185,15 @@ class MainWindow:
     
         
     def toggle_model(self):
-        model_is_none = self.transcriber is None
-        if model_is_none:            
+        if self.transcriber is None:            
             try:
                 config_dict = self.config_manager.get_config_dict()
                 config = TranscriptionConfig(**config_dict)
+                
                 logger.info(f"Activating model: {config.model_size} on {config.device}")
                 self.transcriber = TranscriptionController(config)
                 logger.info("Model activated successfully")
+                
                 self.toggle_model_button.config(text="Release Model")
                 self.start_button.config(state=tk.NORMAL)
                 self.file_menu.entryconfig("Transcribe Audio File", state=tk.NORMAL)
@@ -209,7 +210,10 @@ class MainWindow:
             self.start_button.config(state=tk.DISABLED)
             self.file_menu.entryconfig("Transcribe Audio File", state=tk.DISABLED)
         
-        if self.config_window is not None: self.config_window.toggle_widgets(model_is_none)
+        is_model_activated = self.transcriber is not None
+        self.status_label.config(text= "Ready" if is_model_activated else "Off")
+        self.tray_icon.icon = self.get_tray_icon("READY" if is_model_activated else "OFF")
+        if self.config_window is not None: self.config_window.toggle_widgets(is_model_activated)
 
 
     def toggle_recording(self):
@@ -217,14 +221,19 @@ class MainWindow:
             logger.info("Starting recording")
             self.is_running = True
             self.transcriber.run(output_file="transcription.txt")
+            
             self.status_label.config(text="Recording")
             self.start_button.config(text="Stop Recording")
-        elif self.transcriber:
-            logger.info("Stopping recording")
-            self.is_running = False
-            self.transcriber.stop()
-            self.status_label.config(text="Stopped")
+            self.tray_icon.icon = self.get_tray_icon("RECORDING")
+        else:
+            if self.transcriber:
+                self.is_running = False
+                self.transcriber.stop()
+                logger.info("Stopping recording")
+                
+            self.status_label.config(text="Ready")
             self.start_button.config(text="Start Recording")
+            self.tray_icon.icon = self.get_tray_icon("READY")
 
         
     def select_audio_file(self):
@@ -278,26 +287,35 @@ class MainWindow:
 
     def hide_window(self):
         self.root.withdraw()
-        self.setup_tray_icon()
 
 
     def setup_tray_icon(self):
-        image = Image.new('RGB', (64, 64), color=(0, 0, 255))
-        draw = ImageDraw.Draw(image)
-        draw.ellipse((16, 16, 48, 48), fill=(255, 255, 255))
-
-        self.tray_icon = pystray.Icon("Whisper Voice", image, "Whisper Voice", menu=pystray.Menu(
+        image = self.get_tray_icon("OFF")
+        
+        self.tray_icon = pystray.Icon("WispLive", image, "WispLive", menu=pystray.Menu(
             pystray.MenuItem("Restaurar", self.show_window),
             pystray.MenuItem("Sair", self.exit_app)
         ))
 
         threading.Thread(target=self.tray_icon.run, name="Main - Tray Icon" , daemon=True).start()
+        
+        
+    def get_tray_icon(self, state):
+        image = Image.new('RGBA', (64, 64), color=(0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        
+        if state == "READY":
+            draw.ellipse((16, 16, 48, 48), fill=(0, 255, 0, 255))
+        elif state == "RECORDING":
+            draw.ellipse((16, 16, 48, 48), fill=(255, 0, 0, 255))
+        else:
+            draw.ellipse((16, 16, 48, 48), fill=(0, 0, 255, 255))
+            
+        return image
 
 
     def show_window(self, icon=None, item=None):
         self.root.deiconify()
-        if self.tray_icon:
-            self.tray_icon.stop()
     
     
     def show_logging_window(self):
