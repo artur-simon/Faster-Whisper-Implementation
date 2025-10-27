@@ -25,20 +25,20 @@ class ConfigManager:
         self._config_path = config_path
         self._config_dict = None
 
-    def load_config_from_file(self) -> Dict[str, Any]:
-        if not os.path.exists(self._config_path):
-            return self.DEFAULT_CONFIG.copy()
+    def load_config_from_file(self, config_path=None):
+        path = config_path or self._config_path
+        if not os.path.exists(path):
+            self._config_dict = self.DEFAULT_CONFIG.copy()
+            return
 
         try:
-            with open(self._config_path, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 config = json.load(f)
-
-            result = self.DEFAULT_CONFIG.copy()
-            result.update(config)
-            self._config_dict = result
+            self._config_dict = {**self.DEFAULT_CONFIG, **config}
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"Error loading config: {e}. Using defaults.")
             self._config_dict = self.DEFAULT_CONFIG.copy()
+
 
     def get_config_dict(self):
         return self._config_dict

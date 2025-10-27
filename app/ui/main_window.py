@@ -99,9 +99,8 @@ class MainWindow:
 
         # ===== Settings Menu =====
         settings_menu = tk.Menu(menubar, tearoff=0)
-        settings_menu.add_command(label="Model Parameters", command=lambda: print("Model params"), state=tk.DISABLED)
         settings_menu.add_command(label="Save Preset", command=self.save_config)
-        settings_menu.add_command(label="Load Preset", command=lambda: print("Load preset"), state=tk.DISABLED)
+        settings_menu.add_command(label="Load Preset", command=self.load_config_file)
         settings_menu.add_command(label="Hotkeys", command=lambda: print("Hotkeys"), state=tk.DISABLED)
         menubar.add_cascade(label="Settings", menu=settings_menu)
 
@@ -151,7 +150,7 @@ class MainWindow:
             variable=self.should_paste_content_var,
             onvalue=1,
             offvalue=0,
-            command=lambda:self.on_config_value_change(should_paste_content=self.should_paste_content_var.get())
+            command=lambda:self.update_transcriber_configs(should_paste_content=self.should_paste_content_var.get())
         )
         self.should_paste_content_checkbutton.grid(row=0, column=column)
         column += 1
@@ -174,13 +173,8 @@ class MainWindow:
         version.pack(side=tk.RIGHT)
         sep2 = tk.Label(statusbar, text=" | ")
         sep2.pack(side=tk.RIGHT)
-    
-    
-    def on_config_value_change(self, **kwargs):
-        if(self.transcriber):
-            self.transcriber.update_input_config(**kwargs)
-        
-        
+
+
     def get_icon_path(self):
         import sys, os
         base_path = (
@@ -235,7 +229,7 @@ class MainWindow:
         
     def select_audio_file(self):
         filetypes = (("MP3 files","*.mp3"), ("WAV files", "*.wav"), ("All files", "*.*"))
-        filepath = filedialog.askopenfilename(title="Selecione um arquivo de áudio", filetypes=filetypes)
+        filepath = filedialog.askopenfilename(title="Select an audio file", filetypes=filetypes)
         if filepath and self.transcriber:
             logger.info(f"Selected audio file for transcription: {filepath}")
             self.status_label.config(text="Transcribing file")
@@ -261,16 +255,25 @@ class MainWindow:
             logger.info("Saving configuration")
             self.config_manager.save_config_to_file(config)
             logger.info("Configuration saved successfully")
-            messagebox.showinfo("Sucess", "Configuration saved!")
+            self.status_label.config(text="Config saved")
         except Exception as e:
-            messagebox.showerror("Error", f"Error saving config")
+            self.status_label.config(text="Error saving config")
             logger.error(f"Error saving config: {e}", exc_info=True)
+
+
+    def load_config_file(self):
+        filetypes = [("Json files","*.json")]
+        filepath = filedialog.askopenfilename(title="Select a config file", filetypes=filetypes)
+        if filepath:
+            self.config_manager.load_config_from_file(filepath)
+            self.on_config_change(self.config_manager.get_config_dict())
+            self.status_label.config(text="Config loaded")
 
 
     def copy_text(self):
         content = self.text_viewer.text.get(1.0, tk.END)
         pyperclip.copy(content.strip())
-        self.status_label.config(text="Copied!")
+        self.status_label.config(text="Copied")
 
 
     def hide_window(self):
@@ -309,12 +312,17 @@ class MainWindow:
         self.config_window = ConfigWindow(self, self.config_manager, config, is_running)
     
     
-    def on_config_window_apply(self, config):
-        self.on_config_value_change(**config)
+    def on_config_change(self, config):
+        self.update_transcriber_configs(**config)
         
         config_string = f'Mic input: {config['mic_id']} | Language: {config['language']}'
         self.config_label.config(text= config_string)
-            
+                
+    
+    def update_transcriber_configs(self, **kwargs):
+        if(self.transcriber):
+            self.transcriber.update_input_config(**kwargs)
+        
     
     def exit_app(self):
         logger.info("Shutting down application")
