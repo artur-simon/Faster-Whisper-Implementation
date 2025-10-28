@@ -69,10 +69,10 @@ def calculate_overlap_ratio(word1: Word, word2: Word) -> float:
 
 def select_better_word(word1: Word, word2: Word) -> Word:
     if word1.probability > word2.probability:
-        logger.debug(f"Keeping last: {word1.text} - {word1.probability}")
+        logger.debug(f"Keeping last: {word1.text} - ({word1.probability:0.2f}) over {word2.text} - ({word2.probability:0.2f})")
         return word1
     else:
-        logger.debug(f"Keeping new: {word2.text} - {word2.probability}")
+        logger.debug(f"Keeping new: {word2.text} - ({word2.probability:0.2f}) over {word1.text} - ({word1.probability:0.2f})")
         return word2
 
 
