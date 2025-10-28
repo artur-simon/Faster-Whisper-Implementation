@@ -37,4 +37,5 @@ class TranscriptionConfig:
     vad_filter: bool = True
     mic_id: int = 0
     should_paste_content: bool = False
+    use_previous_context: bool = True
 

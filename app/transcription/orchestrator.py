@@ -21,6 +21,7 @@ logger = logging.getLogger("app.transcription.orchestrator")
 class TranscriptionState:
     timestamp_offset: float
     previous_overlap_words: List[Word]
+    accumulated_text: str
     should_break_line: bool
 
 
@@ -39,6 +40,7 @@ class TranscriptionOrchestrator:
         self._state = TranscriptionState(
             timestamp_offset=0.0,
             previous_overlap_words=[],
+            accumulated_text="",
             should_break_line=False
         )
         
@@ -87,7 +89,13 @@ class TranscriptionOrchestrator:
         
         try:
             np_audio = self._audio_capture.resample_chunk_to_16k(chunk, self._config.sample_rate)
-            segments = self._engine.transcribe_audio(np_audio)
+            segments = self._engine.transcribe_audio(
+                audio_source=np_audio, 
+                context_prompt= (
+                    self._state.accumulated_text if self._config.use_previous_context 
+                    else None
+                ),
+            )
             self._handle_transcription_result(segments)
         except Exception as e:
             logger.error(f"Error processing chunk: {e}", exc_info=True)
@@ -119,6 +127,7 @@ class TranscriptionOrchestrator:
             if words_to_write:
                 logger.debug(f"Writing {len(words_to_write)} words to file")
                 self._writer.write_words(words_to_write)
+                self._state.accumulated_text += "".join([w.text for w in words_to_write])
                 self._state.should_break_line = True
             
             self._state.timestamp_offset = next_offset
@@ -126,12 +135,13 @@ class TranscriptionOrchestrator:
             if resolved_words:
                 logger.debug(f"No speech detected, writing {len(resolved_words)} resolved words")
                 self._writer.write_words(resolved_words)
-            
+                
             if (self._state.should_break_line):
                 logger.debug("Adding line break after speech segment")
                 self._writer.write_string("\n")
                 self._state.should_break_line = False
             
+            self._state.accumulated_text = ""
             self._state.previous_overlap_words = []
             self._state.timestamp_offset = 0.0
     

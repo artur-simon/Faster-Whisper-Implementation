@@ -22,7 +22,7 @@ class TranscriptionEngine:
     def transcribe_audio(
         self, 
         audio_source: str | np.ndarray, 
-        context_words: Optional[List[Word]] = None
+        context_prompt: Optional[str] = None
     ) -> Iterator[TranscriptionSegment]:
         
         transcribe_kwargs = {
@@ -30,13 +30,10 @@ class TranscriptionEngine:
             'language': self._config.language if self._config.language != "auto" else None,
             'word_timestamps': True #Don't need this if transcribing files
         }
-        
-        if context_words:
-            initial_prompt = "".join([w.text for w in context_words]).strip()
-            if initial_prompt:
-                logger.debug(f"Using context prompt: '{initial_prompt[:50]}'")
-                transcribe_kwargs['initial_prompt'] = initial_prompt
-                transcribe_kwargs['condition_on_previous_text'] = True
+    
+        if context_prompt:
+            logger.debug(f"Using context prompt: '{context_prompt[:50]}' (...)")
+            transcribe_kwargs['initial_prompt'] = context_prompt
         
         logger.debug(f"Transcribing with VAD={self._config.vad_filter}, lang={self._config.language}")
         segments, _ = self._model.transcribe(audio_source, **transcribe_kwargs)

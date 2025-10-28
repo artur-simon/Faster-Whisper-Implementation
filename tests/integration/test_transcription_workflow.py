@@ -181,10 +181,9 @@ class TestEndToEndTranscription:
         
         engine = TranscriptionEngine(config)
         
-        context = [Word(text=" previous", start=0.0, end=1.0, probability=0.9)]
         audio_data = np.random.randn(16000).astype("float32")
         
-        segments = list(engine.transcribe_audio(audio_data, context_words=context))
+        segments = list(engine.transcribe_audio(audio_data, context_prompt=" previous"))
         
         assert len(segments) > 0
         call_kwargs = mock_model_instance.transcribe.call_args[1]

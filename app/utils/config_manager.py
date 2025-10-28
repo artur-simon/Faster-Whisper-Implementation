@@ -19,6 +19,7 @@ class ConfigManager:
         "overlap_duration": 1.0,
         "no_speech_threshold": 0.6,
         "should_paste_content": False,
+        "use_previous_context": True
     }
 
     def __init__(self, config_path: str = "config.json"):

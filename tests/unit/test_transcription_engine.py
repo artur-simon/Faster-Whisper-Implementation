@@ -62,16 +62,12 @@ class TestTranscriptionEngine:
         mock_whisper_model.return_value = mock_model_instance
         
         engine = TranscriptionEngine(config)
-        context_words = [
-            Word(text=" hello", start=0.0, end=1.0, probability=0.9)
-        ]
         
-        list(engine.transcribe_audio("test.wav", context_words=context_words))
+        list(engine.transcribe_audio("test.wav", context_prompt="hello"))
         
         call_kwargs = mock_model_instance.transcribe.call_args[1]
         assert 'initial_prompt' in call_kwargs
         assert call_kwargs['initial_prompt'] == "hello"
-        assert call_kwargs['condition_on_previous_text'] is True
     
     def test_release(self, config, mock_whisper_model):
         mock_model_instance = Mock()

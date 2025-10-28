@@ -149,6 +149,12 @@ class ConfigWindow:
         self.disabled_on_model_run.append(vad_check)
         row += 1
         
+        self.config_vars['use_previous_context'] = tk.BooleanVar(value=self.current_config.get("use_previous_context", True))
+        previous_context_check = tk.Checkbutton(frame, text="Use accumulated text as context", 
+                                   variable=self.config_vars['use_previous_context'])
+        previous_context_check.grid(row=row, column=0, columnspan=2, sticky='w', pady=5)
+        row += 1
+        
         
         tk.Label(frame, text="Language:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         self.config_vars['language'] = tk.StringVar(value=self.current_config.get("language", "en"))
