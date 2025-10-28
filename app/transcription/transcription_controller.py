@@ -1,4 +1,3 @@
-from typing import Optional
 import logging
 from app.models import TranscriptionConfig
 from app.transcription.orchestrator import TranscriptionOrchestrator
