@@ -9,11 +9,13 @@ import logging
 
 from app.models import TranscriptionConfig
 from app.transcription.transcription_controller import TranscriptionController
+from app.transcription.batch_processor import BatchProcessor
 from app.ui.live_text_view import LiveTextViewer
 from app.ui.logging_window import LoggingWindow
 from app.ui.config_window import ConfigWindow
 from app.utils.app_state_manager import AppStateManager
 from app.utils.config_manager import ConfigManager
+from app.utils.file_utils import find_audio_files
 from app.utils.logging_manager import LoggingManager
 
 logger = logging.getLogger("app.ui.main_window")
@@ -72,7 +74,7 @@ class MainWindow:
         file_menu.add_cascade(label="Open Recent", menu=self.recent_menu)
         file_menu.add_separator()
         file_menu.add_command(label="Transcribe Audio File", command=self.select_audio_file, state=tk.DISABLED)
-        file_menu.add_command(label="Batch Process Folder", command=lambda: filedialog.askdirectory(), state=tk.DISABLED)
+        file_menu.add_command(label="Batch Process Folder", command=self.batch_process_folder, state=tk.DISABLED)
         file_menu.add_separator()
         file_menu.add_command(label="Export as TXT", command=lambda: print("Export TXT"), state=tk.DISABLED)
         file_menu.add_command(label="Export as SRT", command=lambda: print("Export SRT"), state=tk.DISABLED)
@@ -216,6 +218,7 @@ class MainWindow:
                 self.toggle_model_button.config(text="Release Model")
                 self.start_button.config(state=tk.NORMAL)
                 self.file_menu.entryconfig("Transcribe Audio File", state=tk.NORMAL)
+                self.file_menu.entryconfig("Batch Process Folder", state=tk.NORMAL)
             except Exception as e:
                 logger.error(f"Failed to initialize model: {e}", exc_info=True)
                 messagebox.showerror("Error", f"Failed to initialize model, refer to logs for more details.")
@@ -228,6 +231,7 @@ class MainWindow:
             self.toggle_model_button.config(text="Activate Model")
             self.start_button.config(state=tk.DISABLED)
             self.file_menu.entryconfig("Transcribe Audio File", state=tk.DISABLED)
+            self.file_menu.entryconfig("Batch Process Folder", state=tk.DISABLED)
         
         is_model_activated = self.transcriber is not None
         self.status_label.config(text= "Ready" if is_model_activated else "Off")
@@ -273,6 +277,75 @@ class MainWindow:
                     messagebox.showerror("Error", f"File transcription failed, refer to logs for more details.")
                     self.root.after(0, lambda: self.status_label.config(text=f"Error"))
             threading.Thread(target=transcribe_file, name="Main - transcribe_audio_file").start()
+
+
+    def batch_process_folder(self):
+        if not self.transcriber:
+            messagebox.showwarning("Model Not Activated", "Please activate the model first.")
+            return
+        
+        folder_path = filedialog.askdirectory(title="Select folder with audio files")
+        if not folder_path:
+            return
+        
+        audio_files = find_audio_files(folder_path)
+        
+        if not audio_files:
+            messagebox.showinfo("No Audio Files", f"No supported audio files (.mp3, .wav) found in:\n{folder_path}")
+            return
+        
+        confirm_msg = f"Found {len(audio_files)} audio file(s) in:\n{folder_path}\n\nProceed with batch transcription?"
+        if not messagebox.askyesno("Confirm Batch Processing", confirm_msg):
+            return
+        
+        config_dict = self.config_manager.get_config_dict()
+        config = TranscriptionConfig(**config_dict)
+        
+        def process_batch():
+            processor = BatchProcessor(config)
+            try:
+                def progress_callback(current, total, filename):
+                    status_text = f"Batch: {current}/{total} - {filename}"
+                    def update_status(text=status_text):
+                        self.status_label.config(text=text)
+                    self.root.after(0, update_status)
+                
+                result = processor.process_folder(folder_path, progress_callback)
+                processor.release()
+                
+                def show_result():
+                    if result.failed == 0:
+                        messagebox.showinfo(
+                            "Batch Processing Complete",
+                            f"Successfully transcribed {result.successful} file(s)."
+                        )
+                        self.status_label.config(text="Batch processing completed")
+                    else:
+                        error_summary = "\n".join(result.errors[:10])
+                        if len(result.errors) > 10:
+                            error_summary += f"\n... and {len(result.errors) - 10} more error(s)"
+                        
+                        messagebox.showwarning(
+                            "Batch Processing Complete",
+                            f"Completed: {result.successful} successful, {result.failed} failed\n\n"
+                            f"Errors:\n{error_summary}"
+                        )
+                        self.status_label.config(text=f"Batch: {result.successful}/{result.total_files} completed")
+                
+                self.root.after(0, show_result)
+            except Exception as e:
+                logger.error(f"Batch processing failed: {e}", exc_info=True)
+                error_msg = str(e)
+                def show_error(msg=error_msg):
+                    messagebox.showerror(
+                        "Error",
+                        f"Batch processing failed: {msg}\nRefer to logs for more details."
+                    )
+                    self.status_label.config(text="Batch processing failed")
+                self.root.after(0, show_error)
+        
+        self.status_label.config(text=f"Batch processing: Starting...")
+        threading.Thread(target=process_batch, name="Main - batch_process_folder").start()
 
 
     def save_config(self):
