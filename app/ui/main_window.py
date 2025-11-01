@@ -1,6 +1,7 @@
 import os
 from tkinter import filedialog
 import tkinter as tk
+from tkinter import ttk
 import pyperclip
 import logging
 
@@ -11,6 +12,7 @@ from app.ui.menu_bar import MenuBar
 from app.ui.transcription_handler import TranscriptionHandler
 from app.ui.file_handler import FileHandler
 from app.ui.tray_icon_manager import TrayIconManager
+from app.ui.theme_manager import ThemeManager
 from app.utils.app_state_manager import AppStateManager
 from app.utils.config_manager import ConfigManager
 from app.utils.logging_manager import LoggingManager
@@ -34,6 +36,9 @@ class MainWindow:
         self.state_manager = AppStateManager()
         self.state_manager.load_state()
         
+        self.theme_manager = ThemeManager(self.state_manager.get_dark_mode())
+        self.theme_manager.on_theme_change(self._on_theme_changed)
+        
         saved_geometry = self.state_manager.get_window_geometry()
         if saved_geometry:
             self.root.geometry(saved_geometry)
@@ -42,7 +47,9 @@ class MainWindow:
         self.configure_toolbar(root, config)
         
         current_file = self.state_manager.get_current_transcription_file()
-        self.text_viewer = LiveTextViewer(root, current_file)
+        self.text_viewer = LiveTextViewer(root, current_file, self.theme_manager)
+        
+        self.theme_manager.apply_theme(self.root)
         
         self.logging_manager = LoggingManager.get_instance()
         self.logging_window = None
@@ -59,6 +66,7 @@ class MainWindow:
             "on_hide_window": self.hide_window,
             "on_save_config": self.save_config,
             "on_load_config": self.load_config_file,
+            "on_toggle_dark_mode": self.toggle_dark_mode,
         }
         
         self.menu_bar = MenuBar(root, callbacks)
@@ -85,53 +93,51 @@ class MainWindow:
         self.file_handler.update_recent_files_menu()
 
     def configure_toolbar(self, root, config):
-        toolbar_frame = tk.Frame(root)
+        toolbar_frame = ttk.Frame(root)
         toolbar_frame.pack(pady=5, padx=5, fill='x')
         
-        model_frame = tk.Frame(toolbar_frame)
+        model_frame = ttk.Frame(toolbar_frame)
         model_frame.pack(side="left", anchor="w", fill='x')
         
         column = 0
         
-        self.toggle_model_button = tk.Button(model_frame, text="Activate Model", command=self.toggle_model)
+        self.toggle_model_button = ttk.Button(model_frame, text="Activate Model", command=self.toggle_model)
         self.toggle_model_button.grid(row=0, column=column, padx=(0, 5))
         column += 1
         
-        self.start_button = tk.Button(model_frame, text="Start Recording", command=self.toggle_recording, state=tk.DISABLED)
+        self.start_button = ttk.Button(model_frame, text="Start Recording", command=self.toggle_recording, state=tk.DISABLED)
         self.start_button.grid(row=0, column=column, padx=(0, 5))
         column += 1
         
-        self.configuration_button = tk.Button(model_frame, text="Configuration", command=self.open_config_window)
+        self.configuration_button = ttk.Button(model_frame, text="Configuration", command=self.open_config_window)
         self.configuration_button.grid(row=0, column=column, padx=(0, 5))
         column += 1
         
         self.should_paste_content_var = tk.BooleanVar(value=config.get("should_paste_content", "False"))
-        self.should_paste_content_checkbutton = tk.Checkbutton(
+        self.should_paste_content_checkbutton = ttk.Checkbutton(
             model_frame, 
             text='Auto paste', 
             variable=self.should_paste_content_var,
-            onvalue=1,
-            offvalue=0,
             command=lambda: self.update_transcriber_configs(should_paste_content=self.should_paste_content_var.get())
         )
         self.should_paste_content_checkbutton.grid(row=0, column=column)
 
     def configure_status_bar(self, root, config):
-        statusbar = tk.Frame(root, bd=1, relief=tk.SUNKEN, padx=0, pady=0)
+        statusbar = ttk.Frame(root)
         statusbar.pack(side=tk.BOTTOM, fill=tk.X)
 
-        self.status_label = tk.Label(statusbar, text="Off", anchor=tk.W)
+        self.status_label = ttk.Label(statusbar, text="Off", anchor=tk.W)
         self.status_label.pack(side=tk.LEFT)
-        sep1 = tk.Label(statusbar, text=" | ", anchor=tk.W)
+        sep1 = ttk.Label(statusbar, text=" | ", anchor=tk.W)
         sep1.pack(side=tk.LEFT)
         
         config_string = f'Mic input: {config['mic_id']} | Language: {config['language']}'
-        self.config_label = tk.Label(statusbar, text=config_string)
+        self.config_label = ttk.Label(statusbar, text=config_string)
         self.config_label.pack(side=tk.LEFT)
         
-        version = tk.Label(statusbar, text="v0.2.0", anchor=tk.E)
+        version = ttk.Label(statusbar, text="v0.2.0", anchor=tk.E)
         version.pack(side=tk.RIGHT)
-        sep2 = tk.Label(statusbar, text=" | ")
+        sep2 = ttk.Label(statusbar, text=" | ")
         sep2.pack(side=tk.RIGHT)
 
     def get_icon_path(self):
@@ -211,15 +217,27 @@ class MainWindow:
     def show_window(self, icon=None, item=None):
         self.root.deiconify()
 
+    def _on_theme_changed(self, is_dark: bool) -> None:
+        self.theme_manager.apply_theme(self.root)
+        if self.config_window is not None:
+            self.theme_manager.apply_theme(self.config_window.window)
+        if self.logging_window is not None and self.logging_window.window is not None:
+            self.theme_manager.apply_theme(self.logging_window.window)
+
+    def toggle_dark_mode(self) -> None:
+        is_dark = self.theme_manager.toggle()
+        self.state_manager.set_dark_mode(is_dark)
+        self._on_theme_changed(is_dark)
+
     def show_logging_window(self):
         if self.logging_window is None:
-            self.logging_window = LoggingWindow(self.root, self.logging_manager.log_queue)
+            self.logging_window = LoggingWindow(self.root, self.logging_manager.log_queue, self.theme_manager)
         self.logging_window.show()
 
     def open_config_window(self):
         config = self.config_manager.get_config_dict()
         is_running = self.transcription_handler.transcriber is not None
-        self.config_window = ConfigWindow(self, self.config_manager, config, is_running)
+        self.config_window = ConfigWindow(self, self.config_manager, config, is_running, self.theme_manager)
 
     def on_config_change(self, config):
         self.update_transcriber_configs(**config)

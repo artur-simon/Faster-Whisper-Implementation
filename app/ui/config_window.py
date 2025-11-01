@@ -8,10 +8,11 @@ logger = logging.getLogger("app.ui.config_window")
 
 
 class ConfigWindow:
-    def __init__(self, parent, config_manager:ConfigManager, current_config, is_model_running=False):
+    def __init__(self, parent, config_manager:ConfigManager, current_config, is_model_running=False, theme_manager=None):
         self.parent = parent
         self.config_manager = config_manager
         self.current_config = current_config
+        self.theme_manager = theme_manager
         
         self.window = tk.Toplevel(parent.root)
         self.window.title("Configuration")
@@ -26,9 +27,12 @@ class ConfigWindow:
         self._create_widgets()
         self.toggle_widgets(is_model_running)
         
+        if self.theme_manager:
+            self.theme_manager.apply_theme(self.window)
+        
     def _create_widgets(self):
-        main_frame = tk.Frame(self.window, padx=5, pady=5)
-        main_frame.pack(fill='both', expand=True)
+        main_frame = ttk.Frame(self.window)
+        main_frame.pack(fill='both', expand=True, padx=5, pady=5)
         
         notebook = ttk.Notebook(main_frame)
         notebook.pack(fill='both', expand=True)
@@ -39,52 +43,59 @@ class ConfigWindow:
         notebook.add(model_frame, text='Model')
         notebook.add(audio_frame, text='Audio')
         
-        button_frame = tk.Frame(main_frame)
+        button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill='x', pady=(5, 0))
         
-        tk.Button(button_frame, text="Apply", command=self._apply_config).pack(side='left', padx=5)
-        tk.Button(button_frame, text="OK", command=self._ok).pack(side='left', padx=5)
-        tk.Button(button_frame, text="Cancel", command=self._close).pack(side='left', padx=5)
-        tk.Button(button_frame, text="Save Configuration", command=self._save_config).pack(side='right', padx=5)
+        ttk.Button(button_frame, text="Apply", command=self._apply_config).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="OK", command=self._ok).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self._close).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Save Configuration", command=self._save_config).pack(side='right', padx=5)
         
     def _create_model_tab(self, parent):
-        frame = tk.Frame(parent, padx=20, pady=20)
+        frame = ttk.Frame(parent)
+        inner_frame = ttk.Frame(frame)
+        inner_frame.pack(fill='both', expand=True, padx=20, pady=20)
         
         row = 0
         
-        tk.Label(frame, text="Model Size:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        ttk.Label(inner_frame, text="Model Size:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         self.config_vars['model_size'] = tk.StringVar(value=self.current_config.get("model_size", "medium"))
-        model_menu = tk.OptionMenu(frame, self.config_vars['model_size'], 
-                                   "tiny", "base", "small", "medium", "large-v3", "turbo")
+        model_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['model_size'], 
+                                  values=["tiny", "base", "small", "medium", "large-v3", "turbo"],
+                                  state="readonly")
         model_menu.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(model_menu)
         row += 1
         
-        tk.Label(frame, text="Device:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        ttk.Label(inner_frame, text="Device:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         self.config_vars['device'] = tk.StringVar(value=self.current_config.get("device", "cuda"))
-        device_menu = tk.OptionMenu(frame, self.config_vars['device'], "cpu", "cuda")
+        device_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['device'], 
+                                   values=["cpu", "cuda"], state="readonly")
         device_menu.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(device_menu)
         row += 1
         
-        tk.Label(frame, text="Compute Type:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        ttk.Label(inner_frame, text="Compute Type:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         self.config_vars['compute_type'] = tk.StringVar(value=self.current_config.get("compute_type", "int8"))
-        compute_menu = tk.OptionMenu(frame, self.config_vars['compute_type'], 
-                                     "float32", "float16", "int8_float16", "int8")
+        compute_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['compute_type'], 
+                                    values=["float32", "float16", "int8_float16", "int8"],
+                                    state="readonly")
         compute_menu.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(compute_menu)
         row += 1
         
-        frame.columnconfigure(1, weight=1)
+        inner_frame.columnconfigure(1, weight=1)
         
         return frame
         
     def _create_audio_tab(self, parent):
-        frame = tk.Frame(parent, padx=20, pady=20)
+        frame = ttk.Frame(parent)
+        inner_frame = ttk.Frame(frame)
+        inner_frame.pack(fill='both', expand=True, padx=20, pady=20)
         
         row = 0
         
-        tk.Label(frame, text="Audio Input:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        ttk.Label(inner_frame, text="Audio Input:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         
         mic_names = list(self.device_index_map.keys())
         selected_mic = "No devices"
@@ -104,65 +115,65 @@ class ConfigWindow:
             )
         
         self.config_vars['mic_id'] = tk.StringVar(value=selected_mic)
-        mic_menu = (
-            tk.OptionMenu(frame, self.config_vars['mic_id'], *mic_names) 
-            if mic_names 
-            else tk.OptionMenu(frame, self.config_vars['mic_id'], "No devices")
-        )
+        mic_values = mic_names if mic_names else ["No devices"]
+        mic_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['mic_id'], 
+                               values=mic_values, state="readonly")
         mic_menu.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(mic_menu)
         row += 1
         
-        tk.Label(frame, text="Sample Rate:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        ttk.Label(inner_frame, text="Sample Rate:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         self.config_vars['sample_rate'] = tk.StringVar(value=str(self.current_config.get("sample_rate", 44100)))
-        sample_rate_menu = tk.OptionMenu(frame, self.config_vars['sample_rate'], 
-                                         "16000", "22050", "44100", "48000")
+        sample_rate_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['sample_rate'], 
+                                        values=["16000", "22050", "44100", "48000"],
+                                        state="readonly")
         sample_rate_menu.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(sample_rate_menu)
         row += 1
         
-        tk.Label(frame, text="Chunk Duration (s):", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        ttk.Label(inner_frame, text="Chunk Duration (s):", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         self.config_vars['chunk_duration'] = tk.StringVar(value=str(self.current_config.get("chunk_duration", 5.0)))
-        chunk_entry = tk.Entry(frame, textvariable=self.config_vars['chunk_duration'])
+        chunk_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['chunk_duration'])
         chunk_entry.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(chunk_entry)
         row += 1
         
-        tk.Label(frame, text="Overlap Duration (s):", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        ttk.Label(inner_frame, text="Overlap Duration (s):", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         self.config_vars['overlap_duration'] = tk.StringVar(value=str(self.current_config.get("overlap_duration", 1.0)))
-        overlap_entry = tk.Entry(frame, textvariable=self.config_vars['overlap_duration'])
+        overlap_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['overlap_duration'])
         overlap_entry.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(overlap_entry)
         row += 1
         
-        tk.Label(frame, text="No Speech Threshold:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        ttk.Label(inner_frame, text="No Speech Threshold:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         self.config_vars['no_speech_threshold'] = tk.StringVar(value=str(self.current_config.get("no_speech_threshold", 0.6)))
-        threshold_entry = tk.Entry(frame, textvariable=self.config_vars['no_speech_threshold'])
+        threshold_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['no_speech_threshold'])
         threshold_entry.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(threshold_entry)
         row += 1
         
         self.config_vars['vad_filter'] = tk.BooleanVar(value=self.current_config.get("vad_filter", True))
-        vad_check = tk.Checkbutton(frame, text="Use VAD Filter", 
+        vad_check = ttk.Checkbutton(inner_frame, text="Use VAD Filter", 
                                    variable=self.config_vars['vad_filter'])
         vad_check.grid(row=row, column=0, columnspan=2, sticky='w', pady=5)
         self.disabled_on_model_run.append(vad_check)
         row += 1
         
         self.config_vars['use_previous_context'] = tk.BooleanVar(value=self.current_config.get("use_previous_context", True))
-        previous_context_check = tk.Checkbutton(frame, text="Use accumulated text as context", 
+        previous_context_check = ttk.Checkbutton(inner_frame, text="Use accumulated text as context", 
                                    variable=self.config_vars['use_previous_context'])
         previous_context_check.grid(row=row, column=0, columnspan=2, sticky='w', pady=5)
         row += 1
         
         
-        tk.Label(frame, text="Language:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        ttk.Label(inner_frame, text="Language:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         self.config_vars['language'] = tk.StringVar(value=self.current_config.get("language", "en"))
-        language_menu = tk.OptionMenu(frame, self.config_vars['language'], "pt", "en")
+        language_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['language'], 
+                                     values=["pt", "en"], state="readonly")
         language_menu.grid(row=row, column=1, sticky='ew', pady=5)
         row += 1
             
-        frame.columnconfigure(1, weight=1)
+        inner_frame.columnconfigure(1, weight=1)
         
         return frame
     

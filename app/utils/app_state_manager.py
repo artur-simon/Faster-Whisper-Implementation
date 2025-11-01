@@ -13,6 +13,7 @@ class AppStateManager:
         "last_save_directory": "",
         "window_geometry": None,
         "last_audio_directory": "",
+        "dark_mode": False,
     }
     
     MAX_RECENT_FILES = 10
@@ -92,4 +93,11 @@ class AppStateManager:
 
     def set_last_audio_directory(self, directory: str) -> None:
         self._state_dict["last_audio_directory"] = directory
+        self.save_state()
+
+    def get_dark_mode(self) -> bool:
+        return self._state_dict.get("dark_mode", False)
+
+    def set_dark_mode(self, enabled: bool) -> None:
+        self._state_dict["dark_mode"] = enabled
         self.save_state()

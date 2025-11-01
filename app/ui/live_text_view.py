@@ -6,9 +6,10 @@ logger = logging.getLogger("app.ui.live_text_view")
 
 
 class LiveTextViewer:
-    def __init__(self, root, path):
+    def __init__(self, root, path, theme_manager=None):
         self.root = root
         self.path = path
+        self.theme_manager = theme_manager
 
         frame = tk.Frame(root)
         frame.pack(fill="both", expand=True)
@@ -23,6 +24,10 @@ class LiveTextViewer:
         self.last_size = 0
         self.follow = True
         self.text.bind("<MouseWheel>", self._on_scroll)
+        
+        if self.theme_manager:
+            self.theme_manager.apply_theme(frame)
+        
         self.update()
 
     def set_file_path(self, new_file_path):

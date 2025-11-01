@@ -6,10 +6,11 @@ from typing import Optional
 
 
 class LoggingWindow:
-    def __init__(self, parent, log_queue: queue.Queue):
+    def __init__(self, parent, log_queue: queue.Queue, theme_manager=None):
         self.window: Optional[tk.Toplevel] = None
         self.parent = parent
         self.log_queue = log_queue
+        self.theme_manager = theme_manager
         self.is_running = False
         self.auto_scroll = True
 
@@ -20,6 +21,15 @@ class LoggingWindow:
             logging.ERROR: "#FF0000",
             logging.CRITICAL: "#8B0000",
         }
+        
+        if theme_manager and theme_manager.is_dark_mode():
+            self.level_colors = {
+                logging.DEBUG: "#808080",
+                logging.INFO: "#D4D4D4",
+                logging.WARNING: "#FF8C00",
+                logging.ERROR: "#FF4444",
+                logging.CRITICAL: "#FF0000",
+            }
 
         self.current_filter_level = logging.DEBUG
         self.source_filters: dict[str, tk.BooleanVar] = {}
@@ -29,21 +39,26 @@ class LoggingWindow:
             self.window.deiconify()
             self.window.lift()
             self.window.focus_force()
+            if self.theme_manager:
+                self.theme_manager.apply_theme(self.window)
         else:
             self.window = tk.Toplevel(self.parent)
             self.window.title("Logging Console")
             self.window.geometry("900x600")
             self.window.protocol("WM_DELETE_WINDOW", self.hide)
             self._create_widgets()
+            
+            if self.theme_manager:
+                self.theme_manager.apply_theme(self.window)
 
         self.is_running = True
         self._poll_logs()
 
     def _create_widgets(self):
-        toolbar = tk.Frame(self.window)
+        toolbar = ttk.Frame(self.window)
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=5)
 
-        tk.Label(toolbar, text="Log Level:").pack(side=tk.LEFT, padx=5)
+        ttk.Label(toolbar, text="Log Level:").pack(side=tk.LEFT, padx=5)
 
         self.level_var = tk.StringVar(value="DEBUG")
         level_menu = ttk.Combobox(
@@ -56,23 +71,22 @@ class LoggingWindow:
         level_menu.pack(side=tk.LEFT, padx=5)
         level_menu.bind("<<ComboboxSelected>>", self._on_level_change)
 
-        tk.Button(toolbar, text="Clear", command=self._clear_logs).pack(
+        ttk.Button(toolbar, text="Clear", command=self._clear_logs).pack(
             side=tk.LEFT, padx=5
         )
 
         self.auto_scroll_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(
+        ttk.Checkbutton(
             toolbar,
             text="Auto-scroll",
             variable=self.auto_scroll_var,
             command=self._toggle_auto_scroll,
         ).pack(side=tk.LEFT, padx=5)
 
-        # container for source checkboxes
-        self.filter_frame = tk.Frame(self.window)
+        self.filter_frame = ttk.Frame(self.window)
         self.filter_frame.pack(side=tk.RIGHT)
 
-        text_frame = tk.Frame(self.window)
+        text_frame = ttk.Frame(self.window)
         text_frame.pack(fill=tk.BOTH, expand=True, padx=5)
 
         self.text_widget = scrolledtext.ScrolledText(
@@ -88,10 +102,12 @@ class LoggingWindow:
         if name not in self.source_filters:
             var = tk.BooleanVar(value=True)
             self.source_filters[name] = var
-            cb = tk.Checkbutton(
-                self.filter_frame, text=name, variable=var, onvalue=True, offvalue=False
+            cb = ttk.Checkbutton(
+                self.filter_frame, text=name, variable=var
             )
             cb.pack(side=tk.TOP, anchor=tk.NW, padx=2)
+            if self.theme_manager:
+                self.theme_manager.apply_theme(cb)
 
     def _on_level_change(self, event=None):
         level_name = self.level_var.get()

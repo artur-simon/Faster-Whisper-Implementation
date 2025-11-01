@@ -49,7 +49,7 @@ class MenuBar:
         view_menu = tk.Menu(self.menubar, tearoff=0)
         view_menu.add_command(label="Show Logging Console", command=self.callbacks.get("on_show_logging"))
         view_menu.add_command(label="Hide to System tray", command=self.callbacks.get("on_hide_window"))
-        view_menu.add_command(label="Toggle Dark Mode", state=tk.DISABLED)
+        view_menu.add_command(label="Toggle Dark Mode", command=self.callbacks.get("on_toggle_dark_mode"))
         view_menu.add_command(label="Toggle Waveform", command=lambda: print("Waveform toggle"), state=tk.DISABLED)
         view_menu.add_command(label="Show/Hide Timestamps", command=lambda: print("Timestamps toggle"), state=tk.DISABLED)
         view_menu.add_command(label="Word Confidence Heatmap", command=lambda: print("Confidence heatmap"), state=tk.DISABLED)
