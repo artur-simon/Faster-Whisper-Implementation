@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
 
@@ -25,6 +25,15 @@ class AudioChunk:
 
 
 @dataclass()
+class LocalAgreementConfig:
+    agreement_count: int = 2
+    edit_threshold: float = 0.2
+    confidence_threshold: float = 0.8
+    min_words: int = 3
+    context_size: int = 100
+
+
+@dataclass()
 class TranscriptionConfig:
     model_size: str
     device: str
@@ -38,4 +47,13 @@ class TranscriptionConfig:
     mic_id: int = 0
     should_paste_content: bool = False
     use_previous_context: bool = True
+    transcription_algorithm: str = 'simple_overlap_resolve'
+    local_agreement_config: LocalAgreementConfig = field(default_factory=LocalAgreementConfig)
+    
+    @classmethod
+    def from_dict(cls, config_dict: dict) -> 'TranscriptionConfig':
+        config_copy = config_dict.copy()
+        if 'local_agreement_config' in config_copy and isinstance(config_copy['local_agreement_config'], dict):
+            config_copy['local_agreement_config'] = LocalAgreementConfig(**config_copy['local_agreement_config'])
+        return cls(**config_copy)
 

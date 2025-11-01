@@ -12,6 +12,7 @@ from app.transcription.overlap_resolver import (
     get_words_after_time,
     get_words_before_time
 )
+from app.transcription.local_agreement import LocalAgreementTracker
 from app.utils.document_writer import TranscriptionWriter
 
 logger = logging.getLogger("app.transcription.orchestrator")
@@ -23,6 +24,7 @@ class TranscriptionState:
     previous_overlap_words: List[Word]
     accumulated_text: str
     should_break_line: bool
+    agreement_tracker: Optional['LocalAgreementTracker'] = None
 
 
 class TranscriptionOrchestrator:
@@ -89,12 +91,17 @@ class TranscriptionOrchestrator:
         
         try:
             np_audio = self._audio_capture.resample_chunk_to_16k(chunk, self._config.sample_rate)
+            
+            context_prompt = None
+            if self._config.use_previous_context:
+                if self._config.transcription_algorithm == 'local_agreement' and self._state.agreement_tracker:
+                    context_prompt = self._state.agreement_tracker.get_context_buffer()
+                else:
+                    context_prompt = self._state.accumulated_text
+            
             segments = self._engine.transcribe_audio(
                 audio_source=np_audio, 
-                context_prompt= (
-                    self._state.accumulated_text if self._config.use_previous_context 
-                    else None
-                ),
+                context_prompt=context_prompt,
             )
             self._handle_transcription_result(segments)
         except Exception as e:
@@ -109,6 +116,12 @@ class TranscriptionOrchestrator:
         if current_words:
             current_words = adjust_word_timestamps(current_words, self._state.timestamp_offset)
         
+        if self._config.transcription_algorithm == 'local_agreement':
+            self._handle_local_agreement(current_words, has_speech)
+        else:
+            self._handle_simple_overlap_resolve(current_words, has_speech)
+    
+    def _handle_simple_overlap_resolve(self, current_words: List[Word], has_speech: bool) -> None:
         resolved_words = resolve_overlapping_words(
             self._state.previous_overlap_words, current_words)
         
@@ -144,6 +157,45 @@ class TranscriptionOrchestrator:
             self._state.accumulated_text = ""
             self._state.previous_overlap_words = []
             self._state.timestamp_offset = 0.0
+    
+    def _handle_local_agreement(self, current_words: List[Word], has_speech: bool) -> None:
+        if self._state.agreement_tracker is None:
+            logger.info("Initializing LocalAgreementTracker")
+            self._state.agreement_tracker = LocalAgreementTracker(self._config.local_agreement_config)
+        
+        if has_speech:
+            locked_words, remaining_words, disagreement = self._state.agreement_tracker.process_hypothesis(current_words)
+            
+            if locked_words:
+                logger.debug(f"Emitting {len(locked_words)} locked words")
+                self._writer.write_words(locked_words)
+                self._state.should_break_line = True
+            
+            self._state.previous_overlap_words = remaining_words
+            
+            if self._config.use_previous_context:
+                self._state.accumulated_text = self._state.agreement_tracker.get_context_buffer()
+            
+            if disagreement:
+                logger.debug("Disagreement detected, waiting for next chunk")
+            
+            next_offset = self._state.timestamp_offset + (self._config.chunk_duration - self._config.overlap_duration)
+            self._state.timestamp_offset = next_offset
+        else:
+            if self._state.previous_overlap_words:
+                logger.debug(f"No speech detected, writing {len(self._state.previous_overlap_words)} remaining words")
+                self._writer.write_words(self._state.previous_overlap_words)
+            
+            if self._state.should_break_line:
+                logger.debug("Adding line break after speech segment")
+                self._writer.write_string("\n")
+                self._state.should_break_line = False
+            
+            self._state.accumulated_text = ""
+            self._state.previous_overlap_words = []
+            self._state.timestamp_offset = 0.0
+            if self._state.agreement_tracker:
+                self._state.agreement_tracker.reset()
     
     
     def _extract_words_from_segments(self, segments) -> List[Word]:

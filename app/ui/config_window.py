@@ -39,9 +39,11 @@ class ConfigWindow:
         
         model_frame = self._create_model_tab(notebook)
         audio_frame = self._create_audio_tab(notebook)
+        transcription_frame = self._create_transcription_tab(notebook)
         
         notebook.add(model_frame, text='Model')
         notebook.add(audio_frame, text='Audio')
+        notebook.add(transcription_frame, text='Transcription')
         
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill='x', pady=(5, 0))
@@ -177,11 +179,110 @@ class ConfigWindow:
         
         return frame
     
+    def _create_transcription_tab(self, parent):
+        frame = ttk.Frame(parent)
+        inner_frame = ttk.Frame(frame)
+        inner_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        
+        row = 0
+        
+        ttk.Label(inner_frame, text="Algorithm:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        
+        la_config = self.current_config.get("local_agreement_config", {})
+        
+        self.config_vars['transcription_algorithm'] = tk.StringVar(
+            value=self.current_config.get("transcription_algorithm", "simple_overlap_resolve")
+        )
+        algorithm_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['transcription_algorithm'],
+                                     values=["simple_overlap_resolve", "local_agreement"],
+                                     state="readonly")
+        algorithm_menu.grid(row=row, column=1, sticky='ew', pady=5)
+        row += 1
+        
+        ttk.Separator(inner_frame, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=10)
+        row += 1
+        
+        ttk.Label(inner_frame, text="Local Agreement Settings", font=('TkDefaultFont', 9, 'bold')).grid(
+            row=row, column=0, columnspan=2, sticky='w', pady=5
+        )
+        row += 1
+        
+        self.local_agreement_widgets = []
+        
+        ttk.Label(inner_frame, text="Agreement Count:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['local_agreement_config.agreement_count'] = tk.StringVar(
+            value=str(la_config.get("agreement_count", 2))
+        )
+        agreement_count_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.agreement_count'])
+        agreement_count_entry.grid(row=row, column=1, sticky='ew', pady=5)
+        self.local_agreement_widgets.append(agreement_count_entry)
+        row += 1
+        
+        ttk.Label(inner_frame, text="Edit Threshold:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['local_agreement_config.edit_threshold'] = tk.StringVar(
+            value=str(la_config.get("edit_threshold", 0.2))
+        )
+        edit_threshold_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.edit_threshold'])
+        edit_threshold_entry.grid(row=row, column=1, sticky='ew', pady=5)
+        self.local_agreement_widgets.append(edit_threshold_entry)
+        row += 1
+        
+        ttk.Label(inner_frame, text="Confidence Threshold:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['local_agreement_config.confidence_threshold'] = tk.StringVar(
+            value=str(la_config.get("confidence_threshold", 0.8))
+        )
+        confidence_threshold_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.confidence_threshold'])
+        confidence_threshold_entry.grid(row=row, column=1, sticky='ew', pady=5)
+        self.local_agreement_widgets.append(confidence_threshold_entry)
+        row += 1
+        
+        ttk.Label(inner_frame, text="Minimum Words:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['local_agreement_config.min_words'] = tk.StringVar(
+            value=str(la_config.get("min_words", 3))
+        )
+        min_words_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.min_words'])
+        min_words_entry.grid(row=row, column=1, sticky='ew', pady=5)
+        self.local_agreement_widgets.append(min_words_entry)
+        row += 1
+        
+        ttk.Label(inner_frame, text="Context Buffer Size:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['local_agreement_config.context_size'] = tk.StringVar(
+            value=str(la_config.get("context_size", 100))
+        )
+        context_size_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.context_size'])
+        context_size_entry.grid(row=row, column=1, sticky='ew', pady=5)
+        self.local_agreement_widgets.append(context_size_entry)
+        row += 1
+        
+        inner_frame.columnconfigure(1, weight=1)
+        
+        algorithm_menu.bind('<<ComboboxSelected>>', lambda e: self._toggle_local_agreement_widgets())
+        self._toggle_local_agreement_widgets()
+        
+        return frame
+    
+    def _toggle_local_agreement_widgets(self):
+        algorithm = self.config_vars['transcription_algorithm'].get()
+        state = tk.NORMAL if algorithm == 'local_agreement' else tk.DISABLED
+        for widget in self.local_agreement_widgets:
+            widget.config(state=state)
+    
     def _get_config_dict(self):
         config = {}
+        local_agreement_config = {}
+        
         for key, var in self.config_vars.items():
             value = var.get()
-            if key == 'mic_id':
+            
+            if key.startswith('local_agreement_config.'):
+                la_key = key.replace('local_agreement_config.', '')
+                if la_key in ['agreement_count', 'min_words', 'context_size']:
+                    local_agreement_config[la_key] = int(value)
+                elif la_key in ['edit_threshold', 'confidence_threshold']:
+                    local_agreement_config[la_key] = float(value)
+                else:
+                    local_agreement_config[la_key] = value
+            elif key == 'mic_id':
                 config[key] = self.device_index_map.get(value)
             elif key in ['sample_rate']:
                 config[key] = int(value)
@@ -189,6 +290,10 @@ class ConfigWindow:
                 config[key] = float(value)
             else:
                 config[key] = value
+        
+        if local_agreement_config:
+            config['local_agreement_config'] = local_agreement_config
+        
         return config
     
     def _apply_config(self):

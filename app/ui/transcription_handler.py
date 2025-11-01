@@ -26,7 +26,7 @@ class TranscriptionHandler:
         if self.transcriber is None:
             try:
                 config_dict = self.config_manager.get_config_dict()
-                config = TranscriptionConfig(**config_dict)
+                config = TranscriptionConfig.from_dict(config_dict)
                 
                 logger.info(f"Activating model: {config.model_size} on {config.device}")
                 self.transcriber = TranscriptionController(config)
@@ -113,7 +113,7 @@ class TranscriptionHandler:
             return
         
         config_dict = self.config_manager.get_config_dict()
-        config = TranscriptionConfig(**config_dict)
+        config = TranscriptionConfig.from_dict(config_dict)
         
         def process_batch():
             processor = BatchProcessor(config)

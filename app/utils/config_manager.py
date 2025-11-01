@@ -2,6 +2,7 @@ import json
 import os
 import logging
 from typing import Dict, Any
+from copy import deepcopy
 
 logger = logging.getLogger("app.utils.config_manager")
 
@@ -19,26 +20,44 @@ class ConfigManager:
         "overlap_duration": 1.0,
         "no_speech_threshold": 0.6,
         "should_paste_content": False,
-        "use_previous_context": True
+        "use_previous_context": True,
+        "transcription_algorithm": "simple_overlap_resolve",
+        "local_agreement_config": {
+            "agreement_count": 2,
+            "edit_threshold": 0.2,
+            "confidence_threshold": 0.8,
+            "min_words": 3,
+            "context_size": 100
+        }
     }
 
     def __init__(self, config_path: str = "config.json"):
         self._config_path = config_path
         self._config_dict = None
 
+    @staticmethod
+    def _deep_merge(base: Dict, override: Dict) -> Dict:
+        result = deepcopy(base)
+        for key, value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = ConfigManager._deep_merge(result[key], value)
+            else:
+                result[key] = value
+        return result
+
     def load_config_from_file(self, config_path=None):
         path = config_path or self._config_path
         if not os.path.exists(path):
-            self._config_dict = self.DEFAULT_CONFIG.copy()
+            self._config_dict = deepcopy(self.DEFAULT_CONFIG)
             return
 
         try:
             with open(path, "r", encoding="utf-8") as f:
                 config = json.load(f)
-            self._config_dict = {**self.DEFAULT_CONFIG, **config}
+            self._config_dict = self._deep_merge(self.DEFAULT_CONFIG, config)
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"Error loading config: {e}. Using defaults.")
-            self._config_dict = self.DEFAULT_CONFIG.copy()
+            self._config_dict = deepcopy(self.DEFAULT_CONFIG)
 
 
     def get_config_dict(self):
