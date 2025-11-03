@@ -154,6 +154,13 @@ class ConfigWindow:
         self.disabled_on_model_run.append(threshold_entry)
         row += 1
         
+        ttk.Label(inner_frame, text="Language:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['language'] = tk.StringVar(value=self.current_config.get("language", "en"))
+        language_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['language'], 
+                                     values=["pt", "en"], state="readonly")
+        language_menu.grid(row=row, column=1, sticky='ew', pady=5)
+        row += 1
+        
         self.config_vars['vad_filter'] = tk.BooleanVar(value=self.current_config.get("vad_filter", True))
         vad_check = ttk.Checkbutton(inner_frame, text="Use VAD Filter", 
                                    variable=self.config_vars['vad_filter'])
@@ -167,14 +174,6 @@ class ConfigWindow:
         previous_context_check.grid(row=row, column=0, columnspan=2, sticky='w', pady=5)
         row += 1
         
-        
-        ttk.Label(inner_frame, text="Language:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['language'] = tk.StringVar(value=self.current_config.get("language", "en"))
-        language_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['language'], 
-                                     values=["pt", "en"], state="readonly")
-        language_menu.grid(row=row, column=1, sticky='ew', pady=5)
-        row += 1
-            
         inner_frame.columnconfigure(1, weight=1)
         
         return frame
