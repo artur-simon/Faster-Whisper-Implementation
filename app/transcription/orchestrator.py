@@ -94,10 +94,11 @@ class TranscriptionOrchestrator:
             
             context_prompt = None
             if self._config.use_previous_context:
-                if self._config.transcription_algorithm == 'local_agreement' and self._state.agreement_tracker:
-                    context_prompt = self._state.agreement_tracker.get_context_buffer()
-                else:
-                    context_prompt = self._state.accumulated_text
+                context_prompt = (
+                    self._state.agreement_tracker.get_context_buffer() 
+                    if self._config.transcription_algorithm == 'local_agreement' and self._state.agreement_tracker 
+                    else self._state.accumulated_text[-150:] #150 characters max.
+                )
             
             segments = self._engine.transcribe_audio(
                 audio_source=np_audio, 
@@ -151,7 +152,7 @@ class TranscriptionOrchestrator:
                 
             if (self._state.should_break_line):
                 logger.debug("Adding line break after speech segment")
-                self._writer.write_string("\n")
+                self._writer.write_string_to_file("\n")
                 self._state.should_break_line = False
             
             self._state.accumulated_text = ""
@@ -188,7 +189,7 @@ class TranscriptionOrchestrator:
             
             if self._state.should_break_line:
                 logger.debug("Adding line break after speech segment")
-                self._writer.write_string("\n")
+                self._writer.write_string_and_paste("\n")
                 self._state.should_break_line = False
             
             self._state.accumulated_text = ""

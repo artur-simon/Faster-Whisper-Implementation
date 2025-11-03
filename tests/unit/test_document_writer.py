@@ -100,14 +100,14 @@ class TestTranscriptionWriter:
         )
         
         writer = TranscriptionWriter(temp_file, config)
-        writer.write_string("test")
+        writer.write_string_and_paste("test")
         
         mock_paste.assert_called_once_with("test")
     
     @patch('app.utils.document_writer.paste_content')
     def test_write_string_with_paste_disabled(self, mock_paste, temp_file, config):
         writer = TranscriptionWriter(temp_file, config)
-        writer.write_string("test")
+        writer.write_string_and_paste("test")
         
         mock_paste.assert_not_called()
     

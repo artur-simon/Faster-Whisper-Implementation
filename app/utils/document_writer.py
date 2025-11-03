@@ -18,16 +18,16 @@ class TranscriptionWriter:
         self._encoding = encoding
         self._config = config
 
+    def _format_words(self, words: List[Word]) -> str:
+        return "".join([w.text for w in words]).strip()
+    
     def write_words(self, words: List[Word]) -> None:
         if not words:
             return
         text = self._format_words(words)
-        self.write_string(text + " ")
+        self.write_string_and_paste(text + " ")
 
-    def _format_words(self, words: List[Word]) -> str:
-        return "".join([w.text for w in words]).strip()
-
-    def write_string(self, text: str) -> None:
+    def write_string_and_paste(self, text: str) -> None:
         self.write_string_to_file(text)
         if self._config.should_paste_content:
             logger.debug(f"Pasting content: {text[:50]}...")
