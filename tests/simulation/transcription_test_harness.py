@@ -151,7 +151,7 @@ class TranscriptionTestHarness:
                 break
         
         if self._previous_overlap_words:
-            logger.info(f"Writing {len(self.self._previous_overlap_words)} pending words")
+            logger.info(f"Writing {len(self._previous_overlap_words)} pending words")
             self._all_words.extend(self._previous_overlap_words)
     
     def _process_chunk(self) -> None:
@@ -169,7 +169,6 @@ class TranscriptionTestHarness:
         
         try:
             np_audio = self._simulator.resample_chunk_to_16k(chunk, self._config.sample_rate)
-            #create_wav_file(np_audio, sample_rate=16000)
             segments = self._engine.transcribe_audio(np_audio)
             self._handle_transcription_result(segments)
         except Exception as e:
