@@ -21,7 +21,17 @@ class AudioBuffer:
                 data = data[:, 0]
             self._buffer = np.concatenate((self._buffer, data.copy()))
 
-    def extract_chunk(self, chunk_size: int, overlap_size: int) -> Optional[np.ndarray]:
+    def extract_chunk(self, chunk_size: int, overlap_size: int) -> Optional[np.ndarray]:    
+        """
+        Extract a chunk of data from the buffer with a specified overlap.
+
+        The method copies `chunk_size` elements from the start of the buffer,
+        then retains the last `overlap_size` elements for continuity between chunks.
+        `overlap_size` must not exceed `chunk_size`, or the buffer update will behave incorrectly.
+
+        Returns:
+            np.ndarray: Extracted chunk if enough data is available, else None.
+        """
         with self._lock:
             if len(self._buffer) >= chunk_size:
                 chunk = self._buffer[:chunk_size].copy()
