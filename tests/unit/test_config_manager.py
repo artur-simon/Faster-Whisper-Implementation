@@ -15,21 +15,10 @@ class TestConfigManager:
 
     def test_save_and_load_config(self, temp_config_file):
         manager = ConfigManager(temp_config_file)
-        test_config = {
-            "model_size": "large-v3",
-            "device": "cpu",
-            "compute_type": "float32",
-            "language": "en",
-            "mic_id": 5,
-            "vad_filter": True,
-            "sample_rate": 44100,
-            "chunk_duration": 5.0,
-            "overlap_duration": 1.0,
-            "no_speech_threshold": 0.6,
-            "should_paste_content": False,
-            "use_previous_context": False
-        }
-
+        
+        test_config = manager.DEFAULT_CONFIG
+        test_config['model_size'] = "large-v3"
+        
         manager.save_config_to_file(test_config)
         manager.load_config_from_file()
 
