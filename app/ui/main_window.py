@@ -47,9 +47,7 @@ class MainWindow:
         self.configure_toolbar(root, config)
         
         current_file = self.state_manager.get_current_transcription_file()
-        self.text_viewer = LiveTextViewer(root, current_file, self.theme_manager)
-        
-        self.theme_manager.apply_theme(self.root)
+        self.text_viewer = LiveTextViewer(root, current_file)
         
         self.logging_manager = LoggingManager.get_instance()
         self.logging_window = None
@@ -91,6 +89,8 @@ class MainWindow:
         )
         
         self.file_handler.update_recent_files_menu()
+        
+        self.theme_manager.apply_theme(self.root)
 
     def configure_toolbar(self, root, config):
         toolbar_frame = ttk.Frame(root)
@@ -227,7 +227,6 @@ class MainWindow:
     def toggle_dark_mode(self) -> None:
         is_dark = self.theme_manager.toggle()
         self.state_manager.set_dark_mode(is_dark)
-        self._on_theme_changed(is_dark)
 
     def show_logging_window(self):
         if self.logging_window is None:
