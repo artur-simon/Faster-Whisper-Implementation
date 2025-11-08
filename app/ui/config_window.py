@@ -38,12 +38,14 @@ class ConfigWindow:
         notebook.pack(fill='both', expand=True)
         
         model_frame = self._create_model_tab(notebook)
-        audio_frame = self._create_audio_tab(notebook)
-        transcription_frame = self._create_transcription_tab(notebook)
+        overlap_resolve_frame = self._create_overlap_resolve_tab(notebook)
+        local_agreement_frame = self._create_local_agreement_tab(notebook)
+        vad_frame = self._create_vad_tab(notebook)
         
         notebook.add(model_frame, text='Model')
-        notebook.add(audio_frame, text='Audio')
-        notebook.add(transcription_frame, text='Transcription')
+        notebook.add(overlap_resolve_frame, text='Overlap res.')
+        notebook.add(local_agreement_frame, text='Local agreem.')
+        notebook.add(vad_frame, text='VAD')
         
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill='x', pady=(5, 0))
@@ -57,12 +59,11 @@ class ConfigWindow:
         frame = ttk.Frame(parent)
         inner_frame = ttk.Frame(frame)
         inner_frame.pack(fill='both', expand=True, padx=20, pady=20)
-        
         row = 0
         
         ttk.Label(inner_frame, text="Model Size:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['model_size'] = tk.StringVar(value=self.current_config.get("model_size", "medium"))
-        model_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['model_size'], 
+        self.config_vars['model_size'] = (tk.StringVar(value=self.current_config.get("model_size", "medium")), str)
+        model_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['model_size'][0], 
                                   values=["tiny", "base", "small", "medium", "large-v3", "turbo"],
                                   state="readonly")
         model_menu.grid(row=row, column=1, sticky='ew', pady=5)
@@ -70,32 +71,24 @@ class ConfigWindow:
         row += 1
         
         ttk.Label(inner_frame, text="Device:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['device'] = tk.StringVar(value=self.current_config.get("device", "cuda"))
-        device_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['device'], 
+        self.config_vars['device'] = (tk.StringVar(value=self.current_config.get("device", "cuda")), str)
+        device_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['device'][0], 
                                    values=["cpu", "cuda"], state="readonly")
         device_menu.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(device_menu)
         row += 1
         
         ttk.Label(inner_frame, text="Compute Type:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['compute_type'] = tk.StringVar(value=self.current_config.get("compute_type", "int8"))
-        compute_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['compute_type'], 
+        self.config_vars['compute_type'] = (tk.StringVar(value=self.current_config.get("compute_type", "int8")), str)
+        compute_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['compute_type'][0], 
                                     values=["float32", "float16", "int8_float16", "int8"],
                                     state="readonly")
         compute_menu.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(compute_menu)
         row += 1
         
-        inner_frame.columnconfigure(1, weight=1)
-        
-        return frame
-        
-    def _create_audio_tab(self, parent):
-        frame = ttk.Frame(parent)
-        inner_frame = ttk.Frame(frame)
-        inner_frame.pack(fill='both', expand=True, padx=20, pady=20)
-        
-        row = 0
+        ttk.Separator(inner_frame, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=10)
+        row += 1
         
         ttk.Label(inner_frame, text="Audio Input:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
         
@@ -116,183 +109,172 @@ class ConfigWindow:
                 selected_mic
             )
         
-        self.config_vars['mic_id'] = tk.StringVar(value=selected_mic)
+        self.config_vars['mic_id'] = (tk.StringVar(value=selected_mic), lambda v: self.device_index_map.get(v))
         mic_values = mic_names if mic_names else ["No devices"]
-        mic_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['mic_id'], 
+        mic_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['mic_id'][0], 
                                values=mic_values, state="readonly")
         mic_menu.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(mic_menu)
         row += 1
         
         ttk.Label(inner_frame, text="Sample Rate:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['sample_rate'] = tk.StringVar(value=str(self.current_config.get("sample_rate", 44100)))
-        sample_rate_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['sample_rate'], 
+        self.config_vars['sample_rate'] = (tk.StringVar(value=str(self.current_config.get("sample_rate", 44100))), int)
+        sample_rate_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['sample_rate'][0], 
                                         values=["16000", "22050", "44100", "48000"],
                                         state="readonly")
         sample_rate_menu.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(sample_rate_menu)
         row += 1
         
+        ttk.Label(inner_frame, text="No Speech Threshold:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['no_speech_threshold'] = (tk.StringVar(value=str(self.current_config.get("no_speech_threshold", 0.6))), float)
+        threshold_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['no_speech_threshold'][0])
+        threshold_entry.grid(row=row, column=1, sticky='ew', pady=5)
+        self.disabled_on_model_run.append(threshold_entry)
+        row += 1
+        
+        ttk.Separator(inner_frame, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=10)
+        row += 1
+        
+        ttk.Label(inner_frame, text="Language:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['language'] = (tk.StringVar(value=self.current_config.get("language", "en")), str)
+        language_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['language'][0], 
+                                     values=["pt", "en"], state="readonly")
+        language_menu.grid(row=row, column=1, sticky='ew', pady=5)
+        row += 1
+        
+        ttk.Label(inner_frame, text="Algorithm:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['transcription_algorithm'] = (tk.StringVar(
+            value=self.current_config.get("transcription_algorithm", "simple_overlap_resolve")
+        ), str)
+        algorithm_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['transcription_algorithm'][0],
+                                     values=["simple_overlap_resolve", "local_agreement"],
+                                     state="readonly")
+        algorithm_menu.grid(row=row, column=1, sticky='ew', pady=5)
+        row += 1
+        
+        inner_frame.columnconfigure(1, weight=1)
+        return frame
+
+    def _create_overlap_resolve_tab(self, parent):
+        frame = ttk.Frame(parent)
+        inner_frame = ttk.Frame(frame)
+        inner_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        row = 0
+        
         ttk.Label(inner_frame, text="Chunk Duration (s):", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['chunk_duration'] = tk.StringVar(value=str(self.current_config.get("chunk_duration", 5.0)))
-        chunk_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['chunk_duration'])
+        self.config_vars['chunk_duration'] = (tk.StringVar(value=str(self.current_config.get("chunk_duration", 5.0))), float)
+        chunk_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['chunk_duration'][0])
         chunk_entry.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(chunk_entry)
         row += 1
         
         ttk.Label(inner_frame, text="Overlap Duration (s):", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['overlap_duration'] = tk.StringVar(value=str(self.current_config.get("overlap_duration", 1.0)))
-        overlap_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['overlap_duration'])
+        self.config_vars['overlap_duration'] = (tk.StringVar(value=str(self.current_config.get("overlap_duration", 1.0))), float)
+        overlap_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['overlap_duration'][0])
         overlap_entry.grid(row=row, column=1, sticky='ew', pady=5)
         self.disabled_on_model_run.append(overlap_entry)
         row += 1
         
-        ttk.Label(inner_frame, text="No Speech Threshold:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['no_speech_threshold'] = tk.StringVar(value=str(self.current_config.get("no_speech_threshold", 0.6)))
-        threshold_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['no_speech_threshold'])
-        threshold_entry.grid(row=row, column=1, sticky='ew', pady=5)
-        self.disabled_on_model_run.append(threshold_entry)
-        row += 1
-        
-        ttk.Label(inner_frame, text="Language:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['language'] = tk.StringVar(value=self.current_config.get("language", "en"))
-        language_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['language'], 
-                                     values=["pt", "en"], state="readonly")
-        language_menu.grid(row=row, column=1, sticky='ew', pady=5)
-        row += 1
-        
-        self.config_vars['vad_filter'] = tk.BooleanVar(value=self.current_config.get("vad_filter", True))
-        vad_check = ttk.Checkbutton(inner_frame, text="Use VAD Filter", 
-                                   variable=self.config_vars['vad_filter'])
-        vad_check.grid(row=row, column=0, columnspan=2, sticky='w', pady=5)
-        self.disabled_on_model_run.append(vad_check)
-        row += 1
-        
-        self.config_vars['use_previous_context'] = tk.BooleanVar(value=self.current_config.get("use_previous_context", True))
+        self.config_vars['use_previous_context'] = (tk.BooleanVar(value=self.current_config.get("use_previous_context", True)), bool)
         previous_context_check = ttk.Checkbutton(inner_frame, text="Use accumulated text as context", 
                                    variable=self.config_vars['use_previous_context'])
         previous_context_check.grid(row=row, column=0, columnspan=2, sticky='w', pady=5)
         row += 1
         
         inner_frame.columnconfigure(1, weight=1)
-        
         return frame
     
-    def _create_transcription_tab(self, parent):
+    def _create_local_agreement_tab(self, parent):
         frame = ttk.Frame(parent)
         inner_frame = ttk.Frame(frame)
         inner_frame.pack(fill='both', expand=True, padx=20, pady=20)
-        
         row = 0
         
-        ttk.Label(inner_frame, text="Algorithm:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        
         la_config = self.current_config.get("local_agreement_config", {})
-        
-        self.config_vars['transcription_algorithm'] = tk.StringVar(
-            value=self.current_config.get("transcription_algorithm", "simple_overlap_resolve")
-        )
-        algorithm_menu = ttk.Combobox(inner_frame, textvariable=self.config_vars['transcription_algorithm'],
-                                     values=["simple_overlap_resolve", "local_agreement"],
-                                     state="readonly")
-        algorithm_menu.grid(row=row, column=1, sticky='ew', pady=5)
-        row += 1
-        
-        ttk.Separator(inner_frame, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=10)
-        row += 1
-        
-        ttk.Label(inner_frame, text="Local Agreement Settings", font=('TkDefaultFont', 9, 'bold')).grid(
-            row=row, column=0, columnspan=2, sticky='w', pady=5
-        )
-        row += 1
-        
-        self.local_agreement_widgets = []
-        
+                
         ttk.Label(inner_frame, text="Agreement Count:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['local_agreement_config.agreement_count'] = tk.StringVar(
-            value=str(la_config.get("agreement_count", 2))
-        )
-        agreement_count_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.agreement_count'])
+        self.config_vars['local_agreement_config.agreement_count'] = (tk.StringVar(value=str(la_config.get("agreement_count", 2))), int)
+        agreement_count_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.agreement_count'][0])
         agreement_count_entry.grid(row=row, column=1, sticky='ew', pady=5)
-        self.local_agreement_widgets.append(agreement_count_entry)
         row += 1
         
         ttk.Label(inner_frame, text="Edit Threshold:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['local_agreement_config.edit_threshold'] = tk.StringVar(
-            value=str(la_config.get("edit_threshold", 0.2))
-        )
-        edit_threshold_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.edit_threshold'])
+        self.config_vars['local_agreement_config.edit_threshold'] = (tk.StringVar(value=str(la_config.get("edit_threshold", 0.2))), float)
+        edit_threshold_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.edit_threshold'][0])
         edit_threshold_entry.grid(row=row, column=1, sticky='ew', pady=5)
-        self.local_agreement_widgets.append(edit_threshold_entry)
         row += 1
         
         ttk.Label(inner_frame, text="Confidence Threshold:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['local_agreement_config.confidence_threshold'] = tk.StringVar(
-            value=str(la_config.get("confidence_threshold", 0.8))
-        )
-        confidence_threshold_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.confidence_threshold'])
+        self.config_vars['local_agreement_config.confidence_threshold'] = (tk.StringVar(value=str(la_config.get("confidence_threshold", 0.8))), float)
+        confidence_threshold_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.confidence_threshold'][0])
         confidence_threshold_entry.grid(row=row, column=1, sticky='ew', pady=5)
-        self.local_agreement_widgets.append(confidence_threshold_entry)
         row += 1
         
         ttk.Label(inner_frame, text="Minimum Words:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['local_agreement_config.min_words'] = tk.StringVar(
-            value=str(la_config.get("min_words", 3))
-        )
-        min_words_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.min_words'])
+        self.config_vars['local_agreement_config.min_words'] = (tk.StringVar(value=str(la_config.get("min_words", 3))), int)
+        min_words_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.min_words'][0])
         min_words_entry.grid(row=row, column=1, sticky='ew', pady=5)
-        self.local_agreement_widgets.append(min_words_entry)
         row += 1
         
         ttk.Label(inner_frame, text="Context Buffer Size:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
-        self.config_vars['local_agreement_config.context_size'] = tk.StringVar(
-            value=str(la_config.get("context_size", 100))
-        )
-        context_size_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.context_size'])
+        self.config_vars['local_agreement_config.context_size'] = (tk.StringVar(value=str(la_config.get("context_size", 100))), int)
+        context_size_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['local_agreement_config.context_size'][0])
         context_size_entry.grid(row=row, column=1, sticky='ew', pady=5)
-        self.local_agreement_widgets.append(context_size_entry)
         row += 1
         
         inner_frame.columnconfigure(1, weight=1)
-        
-        algorithm_menu.bind('<<ComboboxSelected>>', lambda e: self._toggle_local_agreement_widgets())
-        self._toggle_local_agreement_widgets()
-        
         return frame
-    
-    def _toggle_local_agreement_widgets(self):
-        algorithm = self.config_vars['transcription_algorithm'].get()
-        state = tk.NORMAL if algorithm == 'local_agreement' else tk.DISABLED
-        for widget in self.local_agreement_widgets:
-            widget.config(state=state)
-    
+      
+    def _create_vad_tab(self, parent):
+        frame = ttk.Frame(parent)
+        inner_frame = ttk.Frame(frame)
+        inner_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        row = 0
+        
+        vad_config = self.current_config.get("vad_params", {})
+        
+        self.config_vars['vad_filter'] = (tk.BooleanVar(value=self.current_config.get("vad_filter", True)), bool)
+        vad_check = ttk.Checkbutton(inner_frame, text="Use VAD Filter", 
+                                   variable=self.config_vars['vad_filter'])
+        vad_check.grid(row=row, column=0, columnspan=2, sticky='w', pady=5)
+        row += 1
+        
+        ttk.Label(inner_frame, text="threshold:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['vad_params.threshold'] = (tk.StringVar(value=str(vad_config.get("threshold", 0.5))), float)
+        threshold_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['vad_params.threshold'][0])
+        threshold_entry.grid(row=row, column=1, sticky='ew', pady=5)
+        row += 1
+        
+        ttk.Label(inner_frame, text="min_speech_duration_ms:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['vad_params.min_speech_duration_ms'] = (tk.StringVar(value=str(vad_config.get("min_speech_duration_ms", 400))), int)
+        min_speech_duration_ms_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['vad_params.min_speech_duration_ms'][0])
+        min_speech_duration_ms_entry.grid(row=row, column=1, sticky='ew', pady=5)
+        row += 1
+        
+        ttk.Label(inner_frame, text="min_silence_duration_ms:", anchor='w').grid(row=row, column=0, sticky='w', pady=5)
+        self.config_vars['vad_params.min_silence_duration_ms'] = (tk.StringVar(value=str(vad_config.get("min_silence_duration_ms", 400))), int)
+        min_silence_duration_ms_entry = ttk.Entry(inner_frame, textvariable=self.config_vars['vad_params.min_silence_duration_ms'][0])
+        min_silence_duration_ms_entry.grid(row=row, column=1, sticky='ew', pady=5)
+        row += 1
+        
+        inner_frame.columnconfigure(1, weight=1)
+        return frame
+     
     def _get_config_dict(self):
-        config = {}
-        local_agreement_config = {}
-        
-        for key, var in self.config_vars.items():
-            value = var.get()
-            
-            if key.startswith('local_agreement_config.'):
-                la_key = key.replace('local_agreement_config.', '')
-                if la_key in ['agreement_count', 'min_words', 'context_size']:
-                    local_agreement_config[la_key] = int(value)
-                elif la_key in ['edit_threshold', 'confidence_threshold']:
-                    local_agreement_config[la_key] = float(value)
-                else:
-                    local_agreement_config[la_key] = value
-            elif key == 'mic_id':
-                config[key] = self.device_index_map.get(value)
-            elif key in ['sample_rate']:
-                config[key] = int(value)
-            elif key in ['chunk_duration', 'overlap_duration', 'no_speech_threshold']:
-                config[key] = float(value)
+        def assign_nested(d, path, value):
+            key = path[0]
+            if len(path) == 1:
+                d[key] = value
             else:
-                config[key] = value
-        
-        if local_agreement_config:
-            config['local_agreement_config'] = local_agreement_config
-        
+                d.setdefault(key, {})
+                assign_nested(d[key], path[1:], value)
+
+        config = {}
+        for key, (var, caster) in self.config_vars.items():
+            value = caster(var.get())
+            assign_nested(config, key.split("."), value)
+
         return config
     
     def _apply_config(self):

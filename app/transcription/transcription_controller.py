@@ -3,6 +3,7 @@ from app.models import TranscriptionConfig
 from app.transcription.orchestrator import TranscriptionOrchestrator
 from app.transcription.transcription_engine import TranscriptionEngine
 from app.utils.document_writer import TranscriptionWriter
+from app.audio.audio_data_provider import AudioDataProvider
 
 logger = logging.getLogger("app.transcription.controller")
 
@@ -10,18 +11,21 @@ logger = logging.getLogger("app.transcription.controller")
 class TranscriptionController:
     def __init__(self, config: TranscriptionConfig):
         self._config = config
+        self._audio_data_provider = AudioDataProvider(config.sample_rate, device_index=config.mic_id)
         self._orchestrator = None
         self._engine = None
 
     def run(self, output_file: str = "transcription.txt") -> None:
         logger.info(f"Starting transcription to file: {output_file}")
-        self._orchestrator = TranscriptionOrchestrator(self._config, output_file)
+        self._audio_data_provider.start()
+        self._orchestrator = TranscriptionOrchestrator(self._config, output_file, self._audio_data_provider)
         self._orchestrator.start()
 
     def stop(self) -> None:
         logger.info("Stopping transcription")
         if self._orchestrator:
             self._orchestrator.stop()
+        self._audio_data_provider.stop()
 
     def transcribe_audio_file(self, audio_path: str, output_file: str) -> None:
         logger.info(f"Transcribing audio file: {audio_path}")
@@ -47,14 +51,24 @@ class TranscriptionController:
         logger.debug(f"Updating config: {kwargs}")
         for key, value in kwargs.items():
             if value is not None and hasattr(self._config, key):
-                setattr(self._config, key, value)
+                if isinstance(value, dict):
+                    nested_obj = getattr(self._config, key)
+                    for sub_key, sub_value in value.items():
+                        if hasattr(nested_obj, sub_key):
+                            setattr(nested_obj, sub_key, sub_value)
+                else:
+                    setattr(self._config, key, value)
 
     def shutdown(self) -> None:
         logger.info("Shutting down transcription controller")
         if self._orchestrator:
             self._orchestrator.release()
             self._orchestrator = None
+        self._audio_data_provider.release()
         if self._engine:
             self._engine.release()
             self._engine = None
         logger.info("Transcription controller shutdown complete")
+
+    def get_audio_chunk(self, chunk_size: int = 1024):
+        return self._audio_data_provider.get_audio_chunk(chunk_size)

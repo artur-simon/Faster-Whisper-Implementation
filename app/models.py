@@ -34,6 +34,13 @@ class LocalAgreementConfig:
 
 
 @dataclass()
+class VADParams:
+    threshold: float = 0.5
+    min_speech_duration_ms: int = 400
+    min_silence_duration_ms: int = 400
+
+
+@dataclass()
 class TranscriptionConfig:
     model_size: str
     device: str
@@ -49,11 +56,14 @@ class TranscriptionConfig:
     use_previous_context: bool = True
     transcription_algorithm: str = 'simple_overlap_resolve'
     local_agreement_config: LocalAgreementConfig = field(default_factory=LocalAgreementConfig)
+    vad_params: VADParams = field(default_factory=VADParams)
     
     @classmethod
     def from_dict(cls, config_dict: dict) -> 'TranscriptionConfig':
         config_copy = config_dict.copy()
         if 'local_agreement_config' in config_copy and isinstance(config_copy['local_agreement_config'], dict):
             config_copy['local_agreement_config'] = LocalAgreementConfig(**config_copy['local_agreement_config'])
+        if 'vad_params' in config_copy and isinstance(config_copy['vad_params'], dict):
+            config_copy['vad_params'] = VADParams(**config_copy['vad_params'])
         return cls(**config_copy)
 

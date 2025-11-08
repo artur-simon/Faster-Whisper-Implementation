@@ -28,6 +28,11 @@ class ConfigManager:
             "confidence_threshold": 0.8,
             "min_words": 3,
             "context_size": 100
+        },
+        "vad_params": {
+            "threshold": 0.5,
+            "min_speech_duration_ms": 400,
+            "min_silence_duration_ms": 400,
         }
     }
 

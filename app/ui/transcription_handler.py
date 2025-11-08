@@ -170,3 +170,8 @@ class TranscriptionHandler:
         if self.transcriber:
             self.transcriber.update_input_config(**kwargs)
 
+    def get_audio_chunk(self, chunk_size: int = 1024):
+        if self.transcriber:
+            return self.transcriber.get_audio_chunk(chunk_size)
+        return None
+

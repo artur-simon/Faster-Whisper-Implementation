@@ -5,6 +5,7 @@ from tkinter import ttk
 import pyperclip
 import logging
 
+from app.ui.audio_visualizer import AudioVisualizer
 from app.ui.live_text_view import LiveTextViewer
 from app.ui.logging_window import LoggingWindow
 from app.ui.config_window import ConfigWindow
@@ -37,7 +38,7 @@ class MainWindow:
         self.state_manager.load_state()
         
         self.theme_manager = ThemeManager(self.state_manager.get_dark_mode())
-        self.theme_manager.on_theme_change(self._on_theme_changed)
+        self.theme_manager.register_theme_change_callback(self._on_theme_changed)
         
         saved_geometry = self.state_manager.get_window_geometry()
         if saved_geometry:
@@ -65,6 +66,7 @@ class MainWindow:
             "on_save_config": self.save_config,
             "on_load_config": self.load_config_file,
             "on_toggle_dark_mode": self.toggle_dark_mode,
+            "on_audio_waveform_analysis": self.show_audio_waveform_analysis,
         }
         
         self.menu_bar = MenuBar(root, callbacks)
@@ -118,10 +120,15 @@ class MainWindow:
             model_frame, 
             text='Auto paste', 
             variable=self.should_paste_content_var,
-            command=lambda: self.update_transcriber_configs(should_paste_content=self.should_paste_content_var.get())
+            command=lambda: self.update_should_paste(should_paste_content=self.should_paste_content_var.get())
         )
         self.should_paste_content_checkbutton.grid(row=0, column=column)
-
+        
+    def update_should_paste(self, **kwargs):
+        config = self.config_manager.get_config_dict()
+        config.update(**kwargs)
+        self.update_transcriber_configs(**kwargs)
+        
     def configure_status_bar(self, root, config):
         statusbar = ttk.Frame(root)
         statusbar.pack(side=tk.BOTTOM, fill=tk.X)
@@ -227,6 +234,18 @@ class MainWindow:
     def toggle_dark_mode(self) -> None:
         is_dark = self.theme_manager.toggle()
         self.state_manager.set_dark_mode(is_dark)
+
+    def show_audio_waveform_analysis(self):
+        logger.info("Showing audio waveform analysis")
+        visualizer = AudioVisualizer(
+            parent=self.root,
+            get_audio_chunk=self.transcription_handler.get_audio_chunk,
+            sample_rate=self.config_manager.get_config_dict()['sample_rate'],
+            chunk_samples=441,
+            update_interval=40,
+            show_spectrogram=True,
+        )
+        visualizer.start()
 
     def show_logging_window(self):
         if self.logging_window is None:

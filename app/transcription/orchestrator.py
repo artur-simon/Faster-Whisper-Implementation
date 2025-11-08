@@ -4,7 +4,7 @@ from typing import List, Optional
 from dataclasses import dataclass
 
 from app.models import Word, TranscriptionConfig
-from app.audio.audio_capture import AudioCapture
+from app.audio.audio_data_provider import AudioDataProvider
 from app.transcription.transcription_engine import TranscriptionEngine
 from app.transcription.overlap_resolver import (
     resolve_overlapping_words,
@@ -28,11 +28,11 @@ class TranscriptionState:
 
 
 class TranscriptionOrchestrator:
-    def __init__(self, config: TranscriptionConfig, output_path: str):
+    def __init__(self, config: TranscriptionConfig, output_path: str, audio_data_provider: AudioDataProvider):
         self._config = config
         self._output_path = output_path
-        
-        self._audio_capture = AudioCapture(config.sample_rate, device_index=config.mic_id)
+        self._audio_data_provider = audio_data_provider
+
         self._engine = TranscriptionEngine(config)
         self._writer = TranscriptionWriter(output_path, config)
         
@@ -54,10 +54,9 @@ class TranscriptionOrchestrator:
         if self._running:
             logger.warning("Orchestrator already running, ignoring start request")
             return
-        
+
         logger.info("Starting transcription orchestrator")
         self._running = True
-        self._audio_capture.start()
         self._thread = threading.Thread(target=self._process_loop, name="Orchestrator - process_loop")
         self._thread.start()
         logger.info("Transcription orchestrator started successfully")
@@ -66,7 +65,6 @@ class TranscriptionOrchestrator:
     def stop(self) -> None:
         logger.info("Stopping transcription orchestrator")
         self._running = False
-        self._audio_capture.stop()
         if self._state.previous_overlap_words:
             logger.debug(f"Writing {len(self._state.previous_overlap_words)} pending words before stopping")
             self._writer.write_words(self._state.previous_overlap_words)
@@ -77,20 +75,20 @@ class TranscriptionOrchestrator:
     
     def _process_loop(self) -> None:
         while self._running:
-            if self._audio_capture.has_data(self._chunk_samples):
+            if self._audio_data_provider.has_data(self._chunk_samples):
                 self._process_chunk()
     
     
     def _process_chunk(self) -> None:
-        chunk = self._audio_capture.get_chunk(self._chunk_samples, self._overlap_samples)
+        chunk = self._audio_data_provider.get_transcription_chunk(self._chunk_samples, self._overlap_samples)
         if chunk is None:
             logger.debug("No chunk available for processing")
             return
-        
+
         logger.debug(f"Processing audio chunk: {len(chunk)} samples")
-        
+
         try:
-            np_audio = self._audio_capture.resample_chunk_to_16k(chunk, self._config.sample_rate)
+            np_audio = self._audio_data_provider.resample_chunk_to_16k(chunk, self._config.sample_rate)
             
             context_prompt = None
             if self._config.use_previous_context:
@@ -210,8 +208,7 @@ class TranscriptionOrchestrator:
     def release(self) -> None:
         logger.info("Releasing orchestrator resources")
         self.stop()
-        self._audio_capture.release()
-        
+
         self._engine.release()
         self._engine = None
         logger.info("Orchestrator resources released")

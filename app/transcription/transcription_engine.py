@@ -1,6 +1,5 @@
-import gc
 from faster_whisper import WhisperModel
-from typing import Iterator, List, Optional
+from typing import Iterator, Optional
 from app.models import Word, TranscriptionSegment, TranscriptionConfig
 import numpy as np
 import logging
@@ -28,7 +27,14 @@ class TranscriptionEngine:
         transcribe_kwargs = {
             'vad_filter': self._config.vad_filter,
             'language': self._config.language if self._config.language != "auto" else None,
-            'word_timestamps': True #Don't need this if transcribing files
+            'word_timestamps': True, #don't need this if transcribing files, can be faster
+            'condition_on_previous_text': False,
+            'vad_parameters': {
+                'threshold': self._config.vad_params.threshold,
+                'max_speech_duration_s': float("inf"),
+                'min_speech_duration_ms': self._config.vad_params.min_speech_duration_ms,
+                'min_silence_duration_ms': self._config.vad_params.min_silence_duration_ms,
+            }
         }
     
         if context_prompt:
