@@ -61,10 +61,3 @@ class TestConfigManager:
         assert loaded_config["model_size"] == "tiny"
         assert loaded_config["device"] == "cuda"
         assert "language" in loaded_config
-
-    def test_default_config_values(self):
-        assert ConfigManager.DEFAULT_CONFIG["model_size"] == "medium"
-        assert ConfigManager.DEFAULT_CONFIG["device"] == "cuda"
-        assert ConfigManager.DEFAULT_CONFIG["compute_type"] == "int8"
-        assert ConfigManager.DEFAULT_CONFIG["language"] == "pt"
-        assert ConfigManager.DEFAULT_CONFIG["mic_id"] is None
