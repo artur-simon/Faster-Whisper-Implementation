@@ -241,7 +241,7 @@ class MainWindow:
             sample_rate=self.config_manager.get_config_dict()['sample_rate'],
             chunk_samples=1024,
             update_interval=20,
-            show_spectrogram=False,
+            show_spectrogram=True,
         )
         visualizer.start()
         visualizer.show()
