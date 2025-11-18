@@ -238,14 +238,13 @@ class MainWindow:
     def show_audio_waveform_analysis(self):
         logger.info("Showing audio waveform analysis")
         visualizer = AudioVisualizer(
-            parent=self.root,
-            get_audio_chunk=self.transcription_handler.get_audio_chunk,
             sample_rate=self.config_manager.get_config_dict()['sample_rate'],
-            chunk_samples=441,
-            update_interval=40,
-            show_spectrogram=True,
+            chunk_samples=1024,
+            update_interval=20,
+            show_spectrogram=False,
         )
         visualizer.start()
+        visualizer.show()
 
     def show_logging_window(self):
         if self.logging_window is None:
