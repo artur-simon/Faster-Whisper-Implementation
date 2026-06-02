@@ -151,16 +151,36 @@ class AudioVisualizer(QWidget):
         self.stop_btn.setEnabled(True)
 
         self._audio_data_provider.start()
-        
+
         self._thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._thread.start()
         self.timer.start()
 
     def stop(self):
+        was_running = self._running
         self._running = False
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.timer.stop()
+
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+            self._thread = None
+
+        if was_running:
+            try:
+                self._audio_data_provider.stop()
+            except Exception:
+                pass
+
+    def closeEvent(self, event):
+        # Stop threads/timer before Qt tears down the GL-backed plot widget.
+        self.stop()
+        try:
+            self._audio_data_provider.release()
+        except Exception:
+            pass
+        super().closeEvent(event)
     
     def _poll_loop(self):
         """
@@ -228,7 +248,7 @@ class AudioVisualizer(QWidget):
 
         self._line.setData(self._time_axis, data)
 
-        mx = max(1e-3, np.max(np.abs(data)))
+        #mx = max(1e-3, np.max(np.abs(data)))
         #self.plot_widget.setYRange(-mx * 1.1, mx * 1.1)
 
         if self.show_spectrogram:

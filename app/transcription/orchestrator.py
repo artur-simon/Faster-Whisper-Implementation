@@ -1,5 +1,6 @@
 import threading
 import logging
+import time
 from typing import List, Optional
 from dataclasses import dataclass
 
@@ -77,6 +78,8 @@ class TranscriptionOrchestrator:
         while self._running:
             if self._audio_data_provider.has_data(self._chunk_samples):
                 self._process_chunk()
+            else:
+                time.sleep(0.1)
     
     
     def _process_chunk(self) -> None:
