@@ -7,6 +7,7 @@ from app.models import TranscriptionConfig, Word
 from app.transcription.orchestrator import TranscriptionOrchestrator
 from app.transcription.transcription_engine import TranscriptionEngine
 from app.audio.audio_capture import AudioCapture
+from app.audio.audio_data_provider import AudioDataProvider
 
 
 class TestTranscriptionWorkflow:
@@ -34,7 +35,9 @@ class TestTranscriptionWorkflow:
     
     @patch('app.transcription.transcription_engine.WhisperModel')
     def test_orchestrator_initialization(self, mock_whisper, config, temp_output_file):
-        orchestrator = TranscriptionOrchestrator(config, temp_output_file)
+        orchestrator = TranscriptionOrchestrator(
+            config, temp_output_file, AudioDataProvider(sample_rate=config.sample_rate)
+        )
         
         assert orchestrator._config == config
         assert orchestrator._output_path == temp_output_file
@@ -42,7 +45,9 @@ class TestTranscriptionWorkflow:
     
     @patch('app.transcription.transcription_engine.WhisperModel')
     def test_orchestrator_state_initialization(self, mock_whisper, config, temp_output_file):
-        orchestrator = TranscriptionOrchestrator(config, temp_output_file)
+        orchestrator = TranscriptionOrchestrator(
+            config, temp_output_file, AudioDataProvider(sample_rate=config.sample_rate)
+        )
         
         assert orchestrator._state.timestamp_offset == 0.0
         assert orchestrator._state.previous_overlap_words == []
@@ -51,7 +56,9 @@ class TestTranscriptionWorkflow:
     @patch('app.transcription.transcription_engine.WhisperModel')
     @patch('app.audio.audio_capture.sd.InputStream')
     def test_orchestrator_start_stop(self, mock_stream, mock_whisper, config, temp_output_file):
-        orchestrator = TranscriptionOrchestrator(config, temp_output_file)
+        orchestrator = TranscriptionOrchestrator(
+            config, temp_output_file, AudioDataProvider(sample_rate=config.sample_rate)
+        )
         
         orchestrator.start()
         assert orchestrator._running
@@ -62,7 +69,9 @@ class TestTranscriptionWorkflow:
     
     @patch('app.transcription.transcription_engine.WhisperModel')
     def test_extract_words_from_segments(self, mock_whisper, config, temp_output_file):
-        orchestrator = TranscriptionOrchestrator(config, temp_output_file)
+        orchestrator = TranscriptionOrchestrator(
+            config, temp_output_file, AudioDataProvider(sample_rate=config.sample_rate)
+        )
         
         mock_segment1 = Mock()
         mock_segment1.no_speech_prob = 0.1
@@ -83,7 +92,9 @@ class TestTranscriptionWorkflow:
     
     @patch('app.transcription.transcription_engine.WhisperModel')
     def test_orchestrator_handles_no_speech(self, mock_whisper, config, temp_output_file):
-        orchestrator = TranscriptionOrchestrator(config, temp_output_file)
+        orchestrator = TranscriptionOrchestrator(
+            config, temp_output_file, AudioDataProvider(sample_rate=config.sample_rate)
+        )
         
         mock_segment = Mock()
         mock_segment.no_speech_prob = 0.9
@@ -96,7 +107,9 @@ class TestTranscriptionWorkflow:
     @patch('app.transcription.transcription_engine.WhisperModel')
     @patch('app.audio.audio_capture.sd.InputStream')
     def test_orchestrator_release(self, mock_stream, mock_whisper, config, temp_output_file):
-        orchestrator = TranscriptionOrchestrator(config, temp_output_file)
+        orchestrator = TranscriptionOrchestrator(
+            config, temp_output_file, AudioDataProvider(sample_rate=config.sample_rate)
+        )
         
         orchestrator.start()
         orchestrator.release()
@@ -218,7 +231,9 @@ class TestEndToEndTranscription:
         mock_model_instance.transcribe.return_value = ([mock_segment], None)
         mock_whisper.return_value = mock_model_instance
         
-        orchestrator = TranscriptionOrchestrator(config, temp_output_file)
+        orchestrator = TranscriptionOrchestrator(
+            config, temp_output_file, AudioDataProvider(sample_rate=config.sample_rate)
+        )
         
         audio_chunk = np.random.randn(16000 * 2).astype("float32")
         orchestrator._handle_transcription_result([mock_segment])

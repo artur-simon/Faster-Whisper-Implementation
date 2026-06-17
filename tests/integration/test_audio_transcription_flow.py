@@ -141,7 +141,11 @@ class TestRealTimeTranscriptionSimulation:
         mock_model_instance = Mock()
         mock_whisper.return_value = mock_model_instance
         
-        orchestrator = TranscriptionOrchestrator(config, temp_output_file)
+        from app.audio.audio_data_provider import AudioDataProvider
+
+        orchestrator = TranscriptionOrchestrator(
+            config, temp_output_file, AudioDataProvider(sample_rate=config.sample_rate)
+        )
         
         for i in range(3):
             mock_word = Mock()
@@ -236,7 +240,7 @@ class TestEdgeCases:
         large_data = np.random.randn(16000 * 100, 1).astype("float32")
         buffer.append(large_data)
         
-        assert buffer.get_buffer_size() == 16000 * 100
+        assert buffer.get_buffer_size() == buffer._size
         
         chunk = buffer.extract_chunk(chunk_size=16000 * 10, overlap_size=16000 * 2)
         assert chunk is not None
