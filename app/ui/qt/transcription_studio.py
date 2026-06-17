@@ -42,6 +42,12 @@ class TranscriptionStudio(QMainWindow):
         super().__init__()
         self._paths, self._document, self._meta = project_store.load_project(folder)
 
+        # Timeline length floor. The player often underreports duration because
+        # container metadata estimates are short, while meta.duration reflects
+        # what faster-whisper actually decoded. We take the max of the two (and
+        # grow it from playback position) so the slider/label cover real content.
+        self._duration_ms = int(float(self._meta.get("duration") or 0) * 1000)
+
         title = self._meta.get("title") or os.path.basename(os.path.normpath(folder))
         self.setWindowTitle(f"WispLive — Transcription Studio — {title}")
         self.resize(900, 720)
@@ -69,9 +75,9 @@ class TranscriptionStudio(QMainWindow):
         self._play_btn.setFixedWidth(90)
         self._play_btn.clicked.connect(self._toggle_play)
         self._slider = QSlider(Qt.Horizontal)
-        self._slider.setRange(0, 0)
+        self._slider.setRange(0, self._duration_ms)
         self._slider.sliderMoved.connect(self._player.setPosition)
-        self._time_label = QLabel("00:00 / 00:00")
+        self._time_label = QLabel(f"00:00 / {_fmt_time(self._duration_ms)}")
         bar.addWidget(self._play_btn)
         bar.addWidget(self._slider, 1)
         bar.addWidget(self._time_label)
@@ -122,14 +128,25 @@ class TranscriptionStudio(QMainWindow):
             self._player.play()
 
     def _on_position(self, ms: int) -> None:
+        if ms > self._duration_ms:
+            self._set_timeline(ms)
         if not self._slider.isSliderDown():
             self._slider.setValue(ms)
-        self._time_label.setText(f"{_fmt_time(ms)} / {_fmt_time(self._player.duration())}")
+        self._update_time_label(ms)
         self._view.highlight_at_time(ms / 1000.0)
 
     def _on_duration(self, ms: int) -> None:
+        # Never shrink below the meta/transcript length — the player commonly
+        # reports a short duration for files whose metadata underreports.
+        self._set_timeline(max(self._duration_ms, ms))
+        self._update_time_label(self._player.position())
+
+    def _set_timeline(self, ms: int) -> None:
+        self._duration_ms = ms
         self._slider.setRange(0, ms)
-        self._time_label.setText(f"{_fmt_time(self._player.position())} / {_fmt_time(ms)}")
+
+    def _update_time_label(self, ms: int) -> None:
+        self._time_label.setText(f"{_fmt_time(ms)} / {_fmt_time(self._duration_ms)}")
 
     def _on_state_changed(self, state) -> None:
         playing = state == QMediaPlayer.PlayingState

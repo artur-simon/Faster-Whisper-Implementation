@@ -84,6 +84,35 @@ class TestExporters:
         assert exporters.to_vtt(doc).strip() == "WEBVTT"
 
 
+class TestProbeDuration:
+    def test_probe_real_fixture(self):
+        av = pytest.importorskip("av")
+        dur = project_store.probe_duration("tests/fixtures/longa_pt_2min.wav")
+        assert dur is not None and 120 < dur < 130
+
+    def test_probe_missing_file_returns_none(self):
+        assert project_store.probe_duration("does/not/exist.wav") is None
+
+
+class TestImportAudio:
+    def test_remux_real_fixture_keeps_duration(self, tmp_path):
+        pytest.importorskip("av")
+        dest = str(tmp_path / "audio.wav")
+        project_store._import_audio("tests/fixtures/longa_pt_2min.wav", dest)
+        assert os.path.isfile(dest)
+        dur = project_store.probe_duration(dest)
+        assert dur is not None and 120 < dur < 130
+
+    def test_falls_back_to_copy_for_non_audio(self, tmp_path):
+        src = tmp_path / "junk.mp3"
+        src.write_bytes(b"not really audio")
+        dest = str(tmp_path / "audio.mp3")
+        project_store._import_audio(str(src), dest)
+        assert os.path.isfile(dest)
+        with open(dest, "rb") as f:
+            assert f.read() == b"not really audio"
+
+
 class TestProjectStore:
     def test_create_project_copies_audio_and_writes_meta(self, tmp_path):
         src = tmp_path / "interview joão.mp3"

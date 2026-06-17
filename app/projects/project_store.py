@@ -76,7 +76,7 @@ def create_project(
 
     ext = os.path.splitext(source_name)[1] or ".audio"
     audio_dest = os.path.join(folder, f"audio{ext}")
-    shutil.copy2(audio_path, audio_dest)
+    _import_audio(audio_path, audio_dest)
 
     paths = ProjectPaths(
         folder=folder,
@@ -108,7 +108,11 @@ def save_document(
     """Write the canonical transcript and refresh derived meta fields."""
     _write_text(paths.transcript_path, document.to_json())
     meta = read_meta(paths)
-    meta["duration"] = document.duration()
+    # The transcript's last word reflects what faster-whisper actually decoded,
+    # which is more reliable than container metadata (which often underreports
+    # duration). Use whichever is longer so the timeline always covers the real
+    # content.
+    meta["duration"] = max(document.duration(), probe_duration(paths.audio_path) or 0.0)
     meta["edited_at"] = (now or datetime.now()).isoformat(timespec="seconds")
     _write_json(paths.meta_path, meta)
     logger.info(f"Saved transcript: {paths.transcript_path}")
@@ -152,6 +156,69 @@ def load_project(folder: str) -> Tuple[ProjectPaths, TranscriptDocument, dict]:
         meta_path=meta_path,
     )
     return paths, document, meta
+
+
+def _import_audio(src: str, dest: str) -> None:
+    """Copy the source audio into the project, repairing its container header.
+
+    Many files (e.g. some m4a/mp3) report a duration estimated from bitrate that
+    is shorter than the real audio. Players then truncate the timeline and clamp
+    seeks to that wrong end, so clicking a late word jumps backward. Re-muxing
+    through PyAV (lossless stream copy) rebuilds the header from the actual
+    packets so the duration is correct and seeking works. Falls back to a plain
+    byte copy if PyAV is unavailable or the remux fails.
+    """
+    try:
+        import av
+    except Exception:
+        shutil.copy2(src, dest)
+        return
+
+    try:
+        in_container = av.open(src)
+        try:
+            in_stream = in_container.streams.audio[0]
+            out_container = av.open(dest, "w")
+            try:
+                out_stream = out_container.add_stream_from_template(in_stream)
+                for packet in in_container.demux(in_stream):
+                    if packet.dts is None:
+                        continue
+                    packet.stream = out_stream
+                    out_container.mux(packet)
+            finally:
+                out_container.close()
+        finally:
+            in_container.close()
+    except Exception as e:
+        logger.warning(f"Audio remux failed ({e}); copying as-is: {src}")
+        try:
+            if os.path.exists(dest):
+                os.remove(dest)
+        except OSError:
+            pass
+        shutil.copy2(src, dest)
+
+
+def probe_duration(path: str) -> Optional[float]:
+    """Return the true decoded duration in seconds via PyAV, or None."""
+    try:
+        import av
+    except Exception:
+        return None
+    try:
+        container = av.open(path)
+        try:
+            if container.duration:
+                return container.duration / 1_000_000.0
+            stream = container.streams.audio[0]
+            if stream.duration and stream.time_base:
+                return float(stream.duration * stream.time_base)
+        finally:
+            container.close()
+    except Exception:
+        return None
+    return None
 
 
 def _find_audio(folder: str) -> Optional[str]:
