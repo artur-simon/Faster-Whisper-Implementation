@@ -10,12 +10,13 @@ class AppStateManager:
     DEFAULT_STATE = {
         "current_transcription_file": "transcription.txt",
         "recent_files": [],
+        "recent_projects": [],
         "last_save_directory": "",
         "window_geometry": None,
         "last_audio_directory": "",
         "dark_mode": False,
     }
-    
+
     MAX_RECENT_FILES = 10
 
     def __init__(self, state_path: str = "app_state.json"):
@@ -72,6 +73,23 @@ class AppStateManager:
 
     def clear_recent_files(self) -> None:
         self._state_dict["recent_files"] = []
+        self.save_state()
+
+    def get_recent_projects(self) -> List[str]:
+        recent = self._state_dict.get("recent_projects", [])
+        return [p for p in recent if os.path.isdir(p)]
+
+    def add_to_recent_projects(self, folder: str) -> None:
+        recent = self._state_dict.get("recent_projects", [])
+        folder = os.path.abspath(folder)
+        if folder in recent:
+            recent.remove(folder)
+        recent.insert(0, folder)
+        self._state_dict["recent_projects"] = recent[:self.MAX_RECENT_FILES]
+        self.save_state()
+
+    def clear_recent_projects(self) -> None:
+        self._state_dict["recent_projects"] = []
         self.save_state()
 
     def get_last_save_directory(self) -> str:

@@ -47,6 +47,52 @@ class TranscriptionController:
             logger.error(f"Error transcribing audio file: {e}", exc_info=True)
             raise Exception(f"Error transcribing audio file: {e}")
 
+    def transcribe_audio_file_to_project(
+        self,
+        audio_path: str,
+        title: str | None = None,
+        projects_root: str | None = None,
+    ) -> "ProjectPaths":
+        """Transcribe a file into a self-contained project folder.
+
+        Unlike :meth:`transcribe_audio_file`, this preserves the full
+        structured result — word-level timestamps and confidence — in a
+        canonical ``transcript.json`` rather than flattening it to text.
+        Returns the created :class:`ProjectPaths`.
+        """
+        from app.projects import project_store
+        from app.projects.transcript_document import TranscriptDocument
+
+        logger.info(f"Transcribing audio file to project: {audio_path}")
+        if self._engine is None:
+            self._engine = TranscriptionEngine(self._config)
+
+        try:
+            segments = [
+                segment
+                for segment in self._engine.transcribe_audio(audio_path)
+                if segment.no_speech_prob < self._config.no_speech_threshold
+            ]
+            paths = project_store.create_project(
+                audio_path,
+                title=title,
+                root=projects_root,
+                meta={
+                    "model_size": self._config.model_size,
+                    "language": self._config.language,
+                },
+            )
+            document = TranscriptDocument.from_segments(segments)
+            project_store.save_document(paths, document)
+            logger.info(
+                f"Transcription project complete: {paths.folder} "
+                f"({len(segments)} segments)"
+            )
+            return paths
+        except Exception as e:
+            logger.error(f"Error transcribing audio file to project: {e}", exc_info=True)
+            raise Exception(f"Error transcribing audio file to project: {e}")
+
     def update_input_config(self, **kwargs):
         logger.debug(f"Updating config: {kwargs}")
         for key, value in kwargs.items():

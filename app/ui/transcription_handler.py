@@ -12,13 +12,14 @@ logger = logging.getLogger("app.ui.transcription_handler")
 
 
 class TranscriptionHandler:
-    def __init__(self, config_manager, state_manager, status_callback, tray_icon_callback, button_update_callback):
+    def __init__(self, config_manager, state_manager, status_callback, tray_icon_callback, button_update_callback, project_created_callback=None):
         self.config_manager = config_manager
         self.state_manager = state_manager
         self.status_callback = status_callback
         self.tray_icon_callback = tray_icon_callback
         self.button_update_callback = button_update_callback
-        
+        self.project_created_callback = project_created_callback
+
         self.transcriber = None
         self.is_running = False
 
@@ -74,24 +75,35 @@ class TranscriptionHandler:
             self.tray_icon_callback("READY")
 
     def select_audio_file(self, root):
+        if not self.transcriber:
+            messagebox.showwarning("Model Not Activated", "Please activate the model first.")
+            return
+
         filetypes = (("MP3 files", "*.mp3"), ("WAV files", "*.wav"), ("All files", "*.*"))
-        filepath = filedialog.askopenfilename(title="Select an audio file", filetypes=filetypes)
-        if filepath and self.transcriber:
-            logger.info(f"Selected audio file for transcription: {filepath}")
-            self.status_callback("Transcribing file")
-            
-            def transcribe_file():
-                try:
-                    transcription_file = self.state_manager.get_current_transcription_file()
-                    self.transcriber.transcribe_audio_file(filepath, transcription_file)
-                    logger.info(f"File transcription completed: {filepath}")
-                    root.after(0, lambda: self.status_callback("Transcription completed"))
-                except Exception as e:
-                    logger.error(f"File transcription failed: {e}", exc_info=True)
-                    root.after(0, lambda: messagebox.showerror("Error", "File transcription failed, refer to logs for more details."))
-                    root.after(0, lambda: self.status_callback("Error"))
-            
-            threading.Thread(target=transcribe_file, name="TranscriptionHandler - transcribe_audio_file").start()
+        initialdir = self.state_manager.get_last_audio_directory() or None
+        filepath = filedialog.askopenfilename(
+            title="Select an audio file to transcribe", filetypes=filetypes, initialdir=initialdir
+        )
+        if not filepath:
+            return
+
+        self.state_manager.set_last_audio_directory(os.path.dirname(filepath))
+        logger.info(f"Selected audio file for transcription: {filepath}")
+        self.status_callback("Transcribing file")
+
+        def transcribe_file():
+            try:
+                paths = self.transcriber.transcribe_audio_file_to_project(filepath)
+                logger.info(f"File transcription completed: {paths.folder}")
+                root.after(0, lambda: self.status_callback("Transcription completed"))
+                if self.project_created_callback:
+                    root.after(0, lambda f=paths.folder: self.project_created_callback(f))
+            except Exception as e:
+                logger.error(f"File transcription failed: {e}", exc_info=True)
+                root.after(0, lambda: messagebox.showerror("Error", "File transcription failed, refer to logs for more details."))
+                root.after(0, lambda: self.status_callback("Error"))
+
+        threading.Thread(target=transcribe_file, name="TranscriptionHandler - transcribe_audio_file").start()
 
     def batch_process_folder(self, root):
         if not self.transcriber:

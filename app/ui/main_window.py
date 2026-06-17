@@ -12,6 +12,7 @@ from app.ui.config_window import ConfigWindow
 from app.ui.menu_bar import MenuBar
 from app.ui.transcription_handler import TranscriptionHandler
 from app.ui.file_handler import FileHandler
+from app.ui.studio_handler import StudioHandler
 from app.ui.tray_icon_manager import TrayIconManager
 from app.ui.theme_manager import ThemeManager
 from app.utils.app_state_manager import AppStateManager
@@ -57,6 +58,7 @@ class MainWindow:
         callbacks = {
             "on_new_file": self.new_transcription_file,
             "on_open_file": self.open_transcription_file,
+            "on_open_studio": self.open_studio_project,
             "on_transcribe_file": self.select_audio_file,
             "on_batch_process": self.batch_process_folder,
             "on_exit": self.exit_app,
@@ -70,15 +72,21 @@ class MainWindow:
         }
         
         self.menu_bar = MenuBar(root, callbacks)
-        
+
+        self.studio_handler = StudioHandler(
+            self.state_manager,
+            self.menu_bar.recent_projects_menu
+        )
+
         self.transcription_handler = TranscriptionHandler(
             self.config_manager,
             self.state_manager,
             self._update_status,
             self._update_tray_icon,
-            self._update_buttons
+            self._update_buttons,
+            project_created_callback=self.studio_handler.register_project
         )
-        
+
         self.file_handler = FileHandler(
             self.state_manager,
             self.text_viewer,
@@ -91,7 +99,8 @@ class MainWindow:
         )
         
         self.file_handler.update_recent_files_menu()
-        
+        self.studio_handler.update_recent_projects_menu()
+
         self.theme_manager.apply_theme(self.root)
 
     def configure_toolbar(self, root, config):
@@ -189,6 +198,9 @@ class MainWindow:
 
     def open_transcription_file(self, file_path=None):
         self.file_handler.open_transcription_file(file_path)
+
+    def open_studio_project(self):
+        self.studio_handler.open_project_dialog()
 
     def save_config(self):
         current_config = self.config_manager.get_config_dict()
