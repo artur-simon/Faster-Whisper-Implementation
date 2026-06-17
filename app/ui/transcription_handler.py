@@ -79,7 +79,13 @@ class TranscriptionHandler:
             messagebox.showwarning("Model Not Activated", "Please activate the model first.")
             return
 
-        filetypes = (("MP3 files", "*.mp3"), ("WAV files", "*.wav"), ("All files", "*.*"))
+        filetypes = (
+            ("Audio files", "*.mp3 *.wav *.m4a"),
+            ("MP3 files", "*.mp3"),
+            ("WAV files", "*.wav"),
+            ("M4A files", "*.m4a"),
+            ("All files", "*.*"),
+        )
         initialdir = self.state_manager.get_last_audio_directory() or None
         filepath = filedialog.askopenfilename(
             title="Select an audio file to transcribe", filetypes=filetypes, initialdir=initialdir
@@ -117,7 +123,7 @@ class TranscriptionHandler:
         audio_files = find_audio_files(folder_path)
         
         if not audio_files:
-            messagebox.showinfo("No Audio Files", f"No supported audio files (.mp3, .wav) found in:\n{folder_path}")
+            messagebox.showinfo("No Audio Files", f"No supported audio files (.mp3, .wav, .m4a) found in:\n{folder_path}")
             return
         
         confirm_msg = f"Found {len(audio_files)} audio file(s) in:\n{folder_path}\n\nProceed with batch transcription?"

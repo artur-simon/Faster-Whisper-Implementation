@@ -26,7 +26,7 @@ def delete_file(file_path: str) -> None:
 
 
 def find_audio_files(directory: str, recursive: bool = True) -> List[str]:
-    supported_extensions = {'.mp3', '.wav'}
+    supported_extensions = {'.mp3', '.wav', '.m4a'}
     audio_files = []
     
     if recursive:

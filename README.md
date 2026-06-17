@@ -95,7 +95,7 @@ Settings are stored in `config.json`:
 
 1. **Activate Model**: Load the selected Whisper model into memory
 2. **Start Recording**: Begin real-time transcription from microphone
-3. **Select Audio File**: Transcribe a WAV/MP3 file
+3. **Select Audio File**: Transcribe a WAV/MP3/M4A file
 4. **Copy Text**: Copy transcription to clipboard
 5. **Paste Transcription**: Toggle auto-paste mode
 
