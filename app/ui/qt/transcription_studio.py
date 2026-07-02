@@ -14,19 +14,22 @@ import os
 import sys
 
 from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QAction
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QSlider,
     QVBoxLayout,
     QWidget,
 )
 
-from app.projects import project_store
+from app.projects import exporters, project_store
 from app.ui.qt.transcript_view import TranscriptView
 
 logger = logging.getLogger("app.ui.qt.studio")
@@ -53,6 +56,7 @@ class TranscriptionStudio(QMainWindow):
         self.resize(900, 720)
 
         self._init_player()
+        self._init_menu()
         self._init_ui()
         self._load_audio()
 
@@ -64,6 +68,23 @@ class TranscriptionStudio(QMainWindow):
         self._player.positionChanged.connect(self._on_position)
         self._player.durationChanged.connect(self._on_duration)
         self._player.playbackStateChanged.connect(self._on_state_changed)
+
+    def _init_menu(self) -> None:
+        file_menu = self.menuBar().addMenu("&File")
+        for label, suffix, formatter in (
+            ("Export as &TXT…", "txt", exporters.to_txt),
+            ("Export as &SRT…", "srt", exporters.to_srt),
+            ("Export as &VTT…", "vtt", exporters.to_vtt),
+        ):
+            action = QAction(label, self)
+            action.triggered.connect(
+                lambda checked=False, s=suffix, f=formatter: self._export(s, f)
+            )
+            file_menu.addAction(action)
+        file_menu.addSeparator()
+        close_action = QAction("&Close", self)
+        close_action.triggered.connect(self.close)
+        file_menu.addAction(close_action)
 
     def _init_ui(self) -> None:
         central = QWidget(self)
@@ -152,6 +173,29 @@ class TranscriptionStudio(QMainWindow):
         playing = state == QMediaPlayer.PlayingState
         self._play_btn.setText("⏸ Pause" if playing else "▶ Play")
 
+    # ---- export --------------------------------------------------------
+    def _export(self, suffix: str, formatter) -> None:
+        # Default next to the project, named after the (filesystem-safe) folder.
+        base = os.path.basename(os.path.normpath(self._paths.folder))
+        default_path = os.path.join(self._paths.folder, f"{base}.{suffix}")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            f"Export as {suffix.upper()}",
+            default_path,
+            f"{suffix.upper()} files (*.{suffix});;All files (*.*)",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(formatter(self._document))
+        except OSError as e:
+            logger.error("Export failed (%s): %s", path, e, exc_info=True)
+            QMessageBox.critical(self, "Export failed", f"Could not write file:\n{e}")
+            return
+        logger.info("Exported %s to %s", suffix.upper(), path)
+        self.statusBar().showMessage(f"Exported {os.path.basename(path)}", 5000)
+
 
 def launch_studio(folder: str):
     """Launch the Studio in its own process (own Qt event loop).
@@ -161,6 +205,13 @@ def launch_studio(folder: str):
     containing spaces are passed through intact.
     """
     import subprocess
+
+    if getattr(sys, "frozen", False):
+        # Frozen (PyInstaller): ``sys.executable`` is the bundled app, not a
+        # Python interpreter, so ``-m module`` is meaningless — the bootloader
+        # would just relaunch the main app. Re-launch ourselves with a flag
+        # the entry point dispatches to the Studio instead.
+        return subprocess.Popen([sys.executable, "--studio", folder])
 
     exe = sys.executable
     gui_exe = os.path.join(os.path.dirname(exe), "pythonw.exe")

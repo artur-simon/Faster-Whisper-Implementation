@@ -29,10 +29,9 @@ class MenuBar:
         file_menu.add_command(label="Transcribe Audio File", command=self.callbacks.get("on_transcribe_file"), state=tk.DISABLED)
         file_menu.add_command(label="Batch Process Folder", command=self.callbacks.get("on_batch_process"), state=tk.DISABLED)
         file_menu.add_separator()
+        # Export lives in the Studio (where a document is loaded). Kept here,
+        # disabled, as a reminder to wire main-window export in the future.
         file_menu.add_command(label="Export as TXT", command=lambda: print("Export TXT"), state=tk.DISABLED)
-        file_menu.add_command(label="Export as SRT", command=lambda: print("Export SRT"), state=tk.DISABLED)
-        file_menu.add_command(label="Export as VTT", command=lambda: print("Export VTT"), state=tk.DISABLED)
-        file_menu.add_command(label="Export as DOCX", command=lambda: print("Export DOCX"), state=tk.DISABLED)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.callbacks.get("on_exit"))
         self.menubar.add_cascade(label="File", menu=file_menu)
