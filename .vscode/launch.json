@@ -18,7 +18,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/tests/simulation/run_manual_test.py",
-            "args": ["${workspaceFolder}/tests/fixtures/sem-título3.wav", "${workspaceFolder}/tests/simulation/report.json"],
+            "args": ["${workspaceFolder}/tests/fixtures/longa_pt_2min.wav", "${workspaceFolder}/tests/simulation/report.json"],
             "console": "integratedTerminal",
             "python": "python",
             "justMyCode": false

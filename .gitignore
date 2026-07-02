@@ -8,3 +8,4 @@ dist/*
 *report*.json
 *config*.json
 app_state.json
+docs/
